@@ -216,18 +216,22 @@ export const ClientProfileSettingsView = () => {
 	const onSubmit = async (data) => {
 		try {
 			setSaving(true);
-			await adminProfileService.updateOwnProfile({
+			const response = await adminProfileService.updateOwnProfile({
 				name: data.fullName,
 				username: data.username,
 				address: data.address,
 				jobName: data.jobName,
 				income: data.income === '' ? undefined : Number(data.income),
+				// Incluir la foto actual si existe para asegurar que se persiste
+				profilePhotoUrl: profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
 			});
 
 			// Actualizar store INMEDIATAMENTE → navbar se actualiza al instante
 			updateUserProfile({
 				name: data.fullName,
 				username: data.username,
+				// Preservar la foto
+				profilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
 			});
 
 			// Actualizar estado local
@@ -240,6 +244,7 @@ export const ClientProfileSettingsView = () => {
 					Address: data.address,
 					JobName: data.jobName,
 					Income: data.income === '' ? prev.profile?.Income : Number(data.income),
+					ProfilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || prev.profile?.ProfilePhotoUrl,
 				},
 			}));
 

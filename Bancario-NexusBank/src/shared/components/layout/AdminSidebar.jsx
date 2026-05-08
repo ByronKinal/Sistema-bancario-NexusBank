@@ -26,23 +26,18 @@ const AdminSidebar = () => {
             Dashboard
           </div>
           <div style={{...item, marginTop:6}}>Usuarios <span style={{marginLeft:6, background:'#ff4757', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#fff'}}>142</span></div>
-          <div style={{...item, marginTop:6}}>Depósitos</div>
+          <div 
+            style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/deposits' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/deposits' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/deposits' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/deposits')}
+          >
+            Depósitos
+          </div>
         </div>
 
         <div style={{marginTop:16}}>
           <div style={sectionTitle}>OPERACIONES</div>
           <div style={{...item}}>Transacciones</div>
           <div style={{...item}}>Promociones</div>
-        </div>
-
-        <div style={{marginTop:16}}>
-          <div style={sectionTitle}>CONTROL</div>
-          <div 
-            style={{...item, background: location.pathname === '/AdminDashboard/requests' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/requests' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/requests' ? 700 : 400}}
-            onClick={() => navigate('/AdminDashboard/requests')}
-          >
-            Pendientes <span style={{marginLeft:6, background:'#f59e0b', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#0b1220'}}>3</span>
-          </div>
         </div>
       </nav>
     </aside>

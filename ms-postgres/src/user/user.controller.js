@@ -151,7 +151,7 @@ export const getAdminClientDetail = async (req, res) => {
         {
           model: UserProfile,
           as: 'UserProfile',
-          attributes: ['Name', 'Username', 'PhoneNumber', 'Address', 'JobName', 'DocumentType', 'DocumentNumber', 'Income', 'Status']
+          attributes: ['Name', 'Username', 'PhoneNumber', 'Address', 'JobName', 'DocumentType', 'DocumentNumber', 'Income', 'Status', 'ProfilePhotoUrl']
         },
         {
           model: UserRole,
@@ -445,7 +445,8 @@ export const editOwnProfile = async (req, res) => {
       username,
       address,
       jobName,
-      income
+      income,
+      profilePhotoUrl
     } = req.body;
 
     const user = await User.findByPk(userId, {
@@ -528,6 +529,10 @@ export const editOwnProfile = async (req, res) => {
         });
       }
       updateData.Income = numericIncome;
+    }
+
+    if (profilePhotoUrl !== undefined) {
+      updateData.ProfilePhotoUrl = profilePhotoUrl;
     }
 
     if (Object.keys(updateData).length === 0) {

@@ -219,10 +219,10 @@ export const AdminDashboardContainer = () => {
                 <div 
                   className="mt-6 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #C8A84B, #b0933e)' }}
-                  onClick={() => navigate('/AdminDashboard/requests')}
+                  onClick={() => navigate('/AdminDashboard/deposits')}
                 >
                   <span className="text-xl mr-2">⏳</span>
-                  Ir a Solicitudes Pendientes
+                  Ir a Depósitos
                 </div>
               </div>
 

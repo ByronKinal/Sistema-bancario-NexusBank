@@ -1,167 +1,163 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import AdminLayout from './AdminLayout.jsx';
-import AdminAddUserModal from './AdminAddUserModal.jsx';
 import { adminDashboardService } from '../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../utils/toast.js';
 import '../../../styles/adminDashboard.css';
 
 const PendingRequestsView = () => {
-  const [requests, setRequests] = useState([]);
+  const [deposits, setDeposits] = useState([]);
+  const [selectedDepositId, setSelectedDepositId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('PENDIENTE');
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const fetchRequests = async () => {
+  const getDisplayStatus = (status) => {
+    if (status === 'PENDIENTE') return 'PENDIENTE';
+    if (status === 'COMPLETADA') return 'APROBADO';
+    return 'RECHAZADO';
+  };
+
+  const getBadgeClass = (status) => {
+    if (status === 'PENDIENTE') return 'badge-pendiente';
+    if (status === 'COMPLETADA') return 'badge-ingreso';
+    return 'badge-egreso';
+  };
+
+  const fetchDeposits = async () => {
     try {
       setLoading(true);
-      const [accountsRes, depositsRes] = await Promise.all([
-        adminDashboardService.getAccounts(),
-        adminDashboardService.getDepositRequests()
-      ]);
+      const response = await adminDashboardService.getDepositRequests();
+      const depositRequests = response?.data?.depositRequests || response?.depositRequests || [];
+      const normalized = Array.isArray(depositRequests)
+        ? depositRequests.map((dep) => ({
+            id: dep.id,
+            reference: dep.id,
+            amount: Number(dep.amount || 0),
+            status: dep.status || 'PENDIENTE',
+            accountNumber: dep.Account?.accountNumber || 'N/D',
+            bank: dep.Account?.accountType || 'Banco Interno',
+            userId: dep.relatedAccountId || 'N/D',
+            description: dep.description || 'Pago por servicio',
+            date: dep.createdAt || dep.updatedAt || new Date().toISOString(),
+            method: dep.channel || 'Transferencia en línea',
+            ipAddress: dep.ipAddress || 'N/D',
+            device: dep.device || 'N/D',
+            location: dep.location || 'N/D',
+            raw: dep
+          }))
+        : [];
 
-      const accData = accountsRes.data || [];
-      const pendingAccounts = accData
-        .filter(acc => ['UNDER_REVIEW', 'CLOSED'].includes(acc.accountStatus))
-        .map(acc => ({
-          id: acc.id,
-          type: 'CUENTA',
-          requestType: 'Apertura de Cuenta',
-          userName: acc.User?.email || acc.userId || 'Cliente',
-          amount: 'N/A',
-          status: acc.accountStatus === 'UNDER_REVIEW' ? 'PENDIENTE' : 'RECHAZADA',
-          date: new Date(acc.createdAt).toLocaleString(),
-          raw: acc
-        }));
-
-      const depData = Array.isArray(depositsRes.data) ? depositsRes.data : [];
-      const pendingDeposits = depData
-        .filter(dep => ['PENDIENTE', 'RECHAZADA', 'FALLIDA'].includes(dep.status))
-        .map(dep => ({
-          id: dep.id,
-          type: 'DEPOSITO',
-          requestType: 'Depósito',
-          userName: dep.account?.owner?.name || dep.accountInfo?.owner?.name || `Cuenta ${dep.accountId || ''}`,
-          amount: `Q${Number(dep.amount).toLocaleString('es-GT', { minimumFractionDigits: 2 })}`,
-          status: dep.status,
-          date: new Date(dep.createdAt).toLocaleString(),
-          raw: dep
-        }));
-
-      setRequests([...pendingAccounts, ...pendingDeposits].sort((a, b) => new Date(b.raw.createdAt) - new Date(a.raw.createdAt)));
+      setDeposits(normalized);
+      if (!selectedDepositId && normalized.length > 0) {
+        setSelectedDepositId(normalized[0].id);
+      }
     } catch (error) {
       console.error(error);
-      showError('Error al cargar las solicitudes');
+      showError('Error al cargar los depósitos.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRequests();
+    fetchDeposits();
   }, []);
 
-  const handleApprove = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar esta solicitud de ${req.userName}?`)) return;
-    try {
-      if (req.type === 'CUENTA') {
-        await adminDashboardService.approveAccount(req.id);
-        showSuccess('Cuenta aprobada exitosamente');
-      } else {
-        await adminDashboardService.approveDeposit(req.id);
-        showSuccess('Depósito aprobado exitosamente');
-      }
-      fetchRequests();
-    } catch (error) {
-      showError(error.response?.data?.message || 'Error al aprobar la solicitud');
-    }
-  };
+  const selectedDeposit = deposits.find((item) => item.id === selectedDepositId) || deposits[0] || null;
 
-  const handleApproveAll = async () => {
-    const pendientes = filteredRequests.filter(r => r.status === 'PENDIENTE');
-    if (pendientes.length === 0) {
-      showError('No hay solicitudes pendientes para aprobar.');
-      return;
-    }
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar TODAS las solicitudes pendientes (${pendientes.length})?`)) return;
-    
-    setLoading(true);
-    let successCount = 0;
-    let errorCount = 0;
-    for (const req of pendientes) {
-      try {
-        if (req.type === 'CUENTA') {
-          await adminDashboardService.approveAccount(req.id);
-        } else {
-          await adminDashboardService.approveDeposit(req.id);
-        }
-        successCount++;
-      } catch (e) {
-        errorCount++;
-      }
-    }
-    if (successCount > 0) showSuccess(`${successCount} solicitudes aprobadas exitosamente.`);
-    if (errorCount > 0) showError(`Error al aprobar ${errorCount} solicitudes.`);
-    fetchRequests();
-  };
-
-  const handleReject = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas rechazar esta solicitud de ${req.userName}?`)) return;
-    try {
-      if (req.type === 'CUENTA') {
-        await adminDashboardService.rejectAccount(req.id);
-        showSuccess('Cuenta rechazada exitosamente');
-      } else {
-        await adminDashboardService.rejectDeposit(req.id);
-        showSuccess('Depósito rechazado o revertido');
-      }
-      fetchRequests();
-    } catch (error) {
-      showError(error.response?.data?.message || 'Error al rechazar la solicitud');
-    }
-  };
-
-  // Filter
-  const filteredRequests = requests.filter(r => {
-    const searchStr = `${r.id} ${r.userName}`.toLowerCase();
-    const matchSearch = searchStr.includes(searchTerm.toLowerCase());
-    
-    let matchStatus = false;
-    if (filterStatus === 'PENDIENTE') matchStatus = r.status === 'PENDIENTE';
-    if (filterStatus === 'RECHAZADA') matchStatus = ['RECHAZADA', 'FALLIDA'].includes(r.status);
-    
-    return matchSearch && matchStatus;
+  const filteredDeposits = deposits.filter((deposit) => {
+    const searchValue = `${deposit.id} ${deposit.accountNumber} ${deposit.bank} ${deposit.description}`.toLowerCase();
+    const matchesSearch = searchValue.includes(searchTerm.toLowerCase());
+    const statusMatch =
+      filterStatus === 'PENDIENTE'
+        ? deposit.status === 'PENDIENTE'
+        : filterStatus === 'APROBADO'
+        ? deposit.status === 'COMPLETADA'
+        : ['FALLIDA', 'REVERTIDA'].includes(deposit.status);
+    return matchesSearch && statusMatch;
   });
+
+  const summary = {
+    pending: deposits.filter((deposit) => deposit.status === 'PENDIENTE').length,
+    approved: deposits.filter((deposit) => deposit.status === 'COMPLETADA').length,
+    rejected: deposits.filter((deposit) => ['FALLIDA', 'REVERTIDA'].includes(deposit.status)).length,
+    total: deposits.length
+  };
+
+  const handleApprove = async (deposit) => {
+    if (deposit.status !== 'PENDIENTE') return;
+    if (!window.confirm('¿Aprobar este depósito?')) return;
+
+    try {
+      await adminDashboardService.approveDeposit(deposit.id);
+      showSuccess('Depósito aprobado correctamente.');
+      fetchDeposits();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Error al aprobar el depósito');
+    }
+  };
+
+  const handleReject = async (deposit) => {
+    if (deposit.status !== 'PENDIENTE') return;
+    if (!window.confirm('¿Rechazar este depósito?')) return;
+
+    try {
+      await adminDashboardService.rejectDeposit(deposit.id);
+      showSuccess('Depósito rechazado correctamente.');
+      fetchDeposits();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Error al rechazar el depósito');
+    }
+  };
 
   return (
     <AdminLayout>
       <section className="admin-section animate-fade-in-up">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-3xl font-bold text-[#1A2E52]">Solicitudes Pendientes y Rechazadas</h2>
-              <div className="flex gap-3">
-                <button 
-                  onClick={handleApproveAll}
-                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
-                >
-                  <span>✓✓</span> Aceptar Todas
-                </button>
-                <button 
-                  onClick={() => setIsModalOpen(true)}
-                  className="px-6 py-3 bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
-                >
-                  <span>➕</span> Agregar Usuario
-                </button>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-[#1A2E52]">Panel de Administración - Depósitos</h2>
+                <p className="text-gray-500">Depósitos pendientes de aprobación y el detalle completo de cada solicitud.</p>
               </div>
             </div>
-            
-            <div className="movements-section glass-panel shadow-md rounded-2xl overflow-hidden border border-white/40">
+          </div>
+
+          <div className="stats-grid">
+            <div className="stat-card blue">
+              <div className="stat-label">Alertas & Notificaciones</div>
+              <div className="stat-value">{summary.total}</div>
+              <div className="stat-subtitle">Depósitos totales visibles</div>
+            </div>
+            <div className="stat-card light-blue">
+              <div className="stat-label">Pendientes</div>
+              <div className="stat-value">{summary.pending}</div>
+              <div className="stat-subtitle positive">Esperando aprobación</div>
+            </div>
+            <div className="stat-card light-blue">
+              <div className="stat-label">Aprobados</div>
+              <div className="stat-value">{summary.approved}</div>
+              <div className="stat-subtitle positive">Procesados</div>
+            </div>
+            <div className="stat-card light-red">
+              <div className="stat-label">Rechazados</div>
+              <div className="stat-value">{summary.rejected}</div>
+              <div className="stat-subtitle negative">Solicitudes fallidas o revertidas</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
+            <div className="movements-section">
               <div className="movements-header">
-                <h3 className="movements-title">Lista de solicitudes</h3>
+                <div>
+                  <h3 className="movements-title">Depósitos Pendientes de Aprobación</h3>
+                  <p className="text-sm text-gray-500 mt-1">Selecciona un depósito para ver el detalle completo.</p>
+                </div>
                 <div className="filters-container">
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Buscar por ID o Nombre..."
+                    placeholder="Buscar referencia, cuenta o banco..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -171,7 +167,8 @@ const PendingRequestsView = () => {
                     onChange={(e) => setFilterStatus(e.target.value)}
                   >
                     <option value="PENDIENTE">Pendientes</option>
-                    <option value="RECHAZADA">Rechazadas</option>
+                    <option value="APROBADO">Aprobados</option>
+                    <option value="RECHAZADO">Rechazados</option>
                   </select>
                 </div>
               </div>
@@ -180,10 +177,10 @@ const PendingRequestsView = () => {
                 <table className="movements-table">
                   <thead>
                     <tr>
-                      <th>ID</th>
-                      <th>Tipo</th>
                       <th>Usuario</th>
                       <th>Fecha</th>
+                      <th>Banco Emisor</th>
+                      <th>Referencia</th>
                       <th>Monto</th>
                       <th>Estado</th>
                       <th>Acciones</th>
@@ -191,60 +188,136 @@ const PendingRequestsView = () => {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan="7" className="text-center py-4">Cargando...</td></tr>
-                    ) : filteredRequests.length > 0 ? (
-                      filteredRequests.map((req) => (
-                        <tr key={`${req.type}-${req.id}`}>
-                          <td className="font-mono text-xs">{req.id}</td>
-                          <td className="font-medium text-xs text-[#2D5899]">{req.requestType}</td>
-                          <td className="font-semibold text-gray-700">{req.userName}</td>
-                          <td className="date-column">{req.date}</td>
-                          <td className="font-bold">{req.amount}</td>
+                      <tr>
+                        <td colSpan="7" className="text-center py-4">Cargando depósitos...</td>
+                      </tr>
+                    ) : filteredDeposits.length > 0 ? (
+                      filteredDeposits.map((deposit) => (
+                        <tr
+                          key={deposit.id}
+                          className={selectedDeposit?.id === deposit.id ? 'bg-[#eff6ff]' : ''}
+                          onClick={() => setSelectedDepositId(deposit.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td className="font-semibold text-sm">{deposit.userId}</td>
+                          <td className="date-column">{new Date(deposit.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                          <td>{deposit.bank}</td>
+                          <td className="font-mono text-xs">{deposit.reference}</td>
+                          <td className="font-bold">Q{deposit.amount.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</td>
                           <td>
-                            <span className={`status-badge ${req.status === 'PENDIENTE' ? 'badge-pendiente' : 'badge-egreso'}`}>
-                              {req.status}
+                            <span className={`status-badge ${getBadgeClass(deposit.status)}`}>
+                              {getDisplayStatus(deposit.status)}
                             </span>
                           </td>
                           <td>
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => handleApprove(req)}
-                                disabled={req.status !== 'PENDIENTE' && req.status !== 'RECHAZADA'}
-                                className={`px-3 py-1.5 text-white rounded-lg text-xs font-bold transition-all shadow-sm transform ${(req.status === 'PENDIENTE' || req.status === 'RECHAZADA') ? 'bg-green-500 hover:bg-green-600 hover:shadow-md hover:-translate-y-0.5' : 'bg-gray-400 opacity-50 cursor-not-allowed'}`}
+                            <div className="flex gap-2 justify-center">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApprove(deposit);
+                                }}
+                                disabled={deposit.status !== 'PENDIENTE'}
+                                className={`px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition ${deposit.status === 'PENDIENTE' ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 cursor-not-allowed'}`}
                               >
                                 Aprobar
                               </button>
-                              
-                              {filterStatus !== 'RECHAZADA' && (
-                                <button 
-                                  onClick={() => handleReject(req)}
-                                  disabled={req.status !== 'PENDIENTE'}
-                                  className={`px-3 py-1.5 text-white rounded-lg text-xs font-bold transition-all shadow-sm transform ${req.status === 'PENDIENTE' ? 'bg-red-500 hover:bg-red-600 hover:shadow-md hover:-translate-y-0.5' : 'bg-gray-400 opacity-50 cursor-not-allowed'}`}
-                                >
-                                  Rechazar
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReject(deposit);
+                                }}
+                                disabled={deposit.status !== 'PENDIENTE'}
+                                className={`px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition ${deposit.status === 'PENDIENTE' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}
+                              >
+                                Rechazar
+                              </button>
                             </div>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="7" className="empty-message">No hay solicitudes que coincidan.</td>
+                        <td colSpan="7" className="empty-message">No se encontraron depósitos.</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
-      </section>
 
-      {isModalOpen && (
-        <AdminAddUserModal 
-          onClose={() => setIsModalOpen(false)} 
-          onSuccess={fetchRequests} 
-        />
-      )}
+            <div className="movements-section">
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div>
+                  <h3 className="movements-title">Detalle del Depósito</h3>
+                  <p className="text-sm text-gray-500 mt-1">Información detallada para el depósito seleccionado.</p>
+                </div>
+                {selectedDeposit && (
+                  <span className={`status-badge ${getBadgeClass(selectedDeposit.status)}`}>
+                    {getDisplayStatus(selectedDeposit.status)}
+                  </span>
+                )}
+              </div>
+
+              {selectedDeposit ? (
+                <div className="space-y-5">
+                  <div className="rounded-[28px] border border-[#e5e7eb] bg-[#f8fafc] p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm uppercase tracking-[0.2em] text-[#64748b]">Monto</p>
+                        <p className="text-3xl font-bold text-[#1f2937]">Q{selectedDeposit.amount.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-[#64748b]">REF</p>
+                        <p className="font-semibold text-[#1f2937]">{selectedDeposit.reference}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-[#e5e7eb] bg-white p-5 shadow-sm">
+                    <div className="grid gap-4 text-sm text-[#334155]">
+                      <div className="flex justify-between"><span className="font-semibold">Usuario</span><span>{selectedDeposit.userId}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Número de Cuenta</span><span>{selectedDeposit.accountNumber}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Banco Emisor</span><span>{selectedDeposit.bank}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Número de Referencia</span><span>{selectedDeposit.reference}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Fecha / Hora</span><span>{new Date(selectedDeposit.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Método / Canal</span><span>{selectedDeposit.method}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Descripción</span><span>{selectedDeposit.description}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Dirección IP</span><span>{selectedDeposit.ipAddress}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Dispositivo</span><span>{selectedDeposit.device}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold">Ubicación</span><span>{selectedDeposit.location}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(selectedDeposit)}
+                      disabled={selectedDeposit.status !== 'PENDIENTE'}
+                      className="rounded-2xl bg-green-600 text-white py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Aprobar Depósito
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReject(selectedDeposit)}
+                      disabled={selectedDeposit.status !== 'PENDIENTE'}
+                      className="rounded-2xl bg-red-600 text-white py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Rechazar Depósito
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-gray-300 p-8 text-center text-gray-500">
+                  Selecciona un depósito para ver el detalle.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
     </AdminLayout>
   );
 };

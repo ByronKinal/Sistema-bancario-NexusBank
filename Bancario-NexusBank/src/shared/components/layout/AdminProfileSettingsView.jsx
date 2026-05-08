@@ -74,6 +74,7 @@ export const AdminProfileSettingsView = () => {
 	const navigate = useNavigate();
 	const user = useAuthStore((state) => state.user);
 	const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
+	const updateUserProfile = useAuthStore((state) => state.updateUserProfile);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -210,12 +211,19 @@ export const AdminProfileSettingsView = () => {
 	const onSubmit = async (data) => {
 		try {
 			setSaving(true);
-			await adminProfileService.updateOwnProfile({
+			const response = await adminProfileService.updateOwnProfile({
 				name: data.fullName,
 				username: data.username,
 				address: data.address,
 				jobName: data.jobName,
 				income: data.income === '' ? undefined : Number(data.income),
+				// Incluir la foto actual si existe para asegurar que se persiste
+				profilePhotoUrl: profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
+			});
+
+			// Preservar la foto en el store
+			updateUserProfile({
+				profilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
 			});
 
 			await refreshUserProfile();

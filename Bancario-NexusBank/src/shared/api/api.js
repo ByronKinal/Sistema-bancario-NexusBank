@@ -13,7 +13,7 @@ export const axiosAuth = axios.create({
 });
 
 export const axiosClient = axios.create({
-  baseURL: authURL,
+  baseURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -21,7 +21,7 @@ export const axiosClient = axios.create({
 });
 
 export const axiosAdmin = axios.create({
-  baseURL: authURL,
+  baseURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

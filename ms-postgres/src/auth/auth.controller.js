@@ -186,7 +186,13 @@ export const login = async (req, res) => {
       metadata: { email, role: normalizeRole(roleName) }
     });
 
-    const profile = await UserProfile.findOne({ where: { UserId: user.id } });
+    // Recuperar el perfil completo incluyendo la foto
+    const profile = await UserProfile.findOne({ 
+      where: { UserId: user.id },
+      raw: false
+    });
+
+    const photoUrl = profile && profile.ProfilePhotoUrl ? profile.ProfilePhotoUrl : null;
 
     return sendSuccess(res, {
       status: 200,
@@ -198,6 +204,7 @@ export const login = async (req, res) => {
           email: user.email,
           name: profile?.Name || profile?.Username || 'Usuario',
           username: profile?.Username || 'Usuario',
+          profilePhotoUrl: photoUrl,
           role: normalizeRole(roleName)
         }
       }
@@ -550,12 +557,17 @@ export const getProfile = async (req, res) => {
       return res.status(404).json({ msg: 'Usuario no encontrado' });
     }
 
-    const profile = await UserProfile.findOne({ where: { UserId: userId } });
+    const profile = await UserProfile.findOne({ 
+      where: { UserId: userId },
+      attributes: { include: ['ProfilePhotoUrl'] }
+    });
     const accounts = await Account.findAll({ where: { userId } });
 
     res.status(200).json({
+      success: true,
+      message: 'Perfil obtenido exitosamente',
+      profile: profile || {},
       user,
-      profile,
       accounts
     });
   } catch (err) {
@@ -585,11 +597,18 @@ export const uploadProfilePhotoController = async (req, res) => {
 		// Ruta relativa para acceso público
 		const photoUrl = `/uploads/profiles/${req.file.filename}`;
 
+		// Actualizar el perfil con la nueva foto
 		await user.UserProfile.update({ ProfilePhotoUrl: photoUrl });
 
+		// Recargar el perfil para obtener los datos actualizados
+		await user.reload({ include: [{ model: UserProfile, as: 'UserProfile' }] });
+
 		return res.status(200).json({
+			success: true,
 			message: 'Foto de perfil actualizada exitosamente',
-			data: { photoUrl }
+			data: { 
+				photoUrl: user.UserProfile.ProfilePhotoUrl || photoUrl
+			}
 		});
 	} catch (err) {
 		console.error('Error al subir foto de perfil:', err);
