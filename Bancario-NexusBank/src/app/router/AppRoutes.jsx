@@ -11,6 +11,7 @@ import AdminDashboardContainer from '../../shared/components/layout/AdminDashboa
 import PendingDepositRequestsView from '../../shared/components/layout/PendingDepositRequestsView.jsx';
 import AdminProfileSettingsView from '../../shared/components/layout/AdminProfileSettingsView.jsx';
 import { Deposits } from '../../features/client/pages/Deposits.jsx';
+import { Transfers } from '../../features/client/pages/Transfers.jsx';
 import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
 
 export const AppRoutes = () => {
@@ -31,6 +32,7 @@ export const AppRoutes = () => {
                 <Route index element={<ClientDashboard />} />
                 <Route path="profile-settings" element={<ClientProfileSettingsView />} />
                 <Route path="deposits" element={<Deposits />} />
+                <Route path="transfers" element={<Transfers />} />
             </Route>
             
             <Route

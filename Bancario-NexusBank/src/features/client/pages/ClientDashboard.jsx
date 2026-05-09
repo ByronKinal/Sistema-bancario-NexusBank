@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useClientStore } from '../store/useClientStore.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showError } from '../../../shared/utils/toast.js';
 
 export const ClientDashboard = () => {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const {
     mainAccount,
@@ -161,6 +163,12 @@ export const ClientDashboard = () => {
             ].map((action, idx) => (
               <button
                 key={idx}
+                type="button"
+                onClick={() => {
+                  if (action.label === 'Transferir') {
+                    navigate('/clientdashboard/transfers');
+                  }
+                }}
                 className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${action.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
