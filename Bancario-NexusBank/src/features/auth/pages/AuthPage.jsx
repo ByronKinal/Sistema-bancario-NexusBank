@@ -1,12 +1,19 @@
 import { AuthContainer, AuthCard } from '../../../shared/components/auth/index.js';
 import { LoginForm } from '../components/LoginForm.jsx';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+const RECOVERY_FLOW_KEY = 'nexusbank-password-reset-flow';
 
 export const AuthPage = () => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    sessionStorage.removeItem(RECOVERY_FLOW_KEY);
+  }, []);
+
   const handleForgotPassword = () => {
-    navigate('/reset-password');
+    navigate('/forgot-password');
   };
 
   return (

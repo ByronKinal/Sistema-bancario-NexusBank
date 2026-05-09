@@ -67,8 +67,8 @@ export const LoginForm = ({ onForgot }) => {
 
       <div className="auth-inline-row">
         <label className="auth-remember">
-          <input type="checkbox" style={{ accentColor: '#2D5899' }} />
-          <span>Recordar este dispositivo</span>
+          <input type="checkbox" style={{ accentColor: '#2D5899' }} />          
+          Recordarme
         </label>
       </div>
 

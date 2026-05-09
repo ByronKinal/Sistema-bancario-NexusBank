@@ -7,6 +7,8 @@ import { ClientDashboard } from '../../features/client/pages/ClientDashboard.jsx
 import ClientProfileSettingsView from '../../features/client/pages/ClientProfileSettingsView.jsx';
 import { RegisterPage } from '../../features/auth/pages/RegisterPage.jsx';
 import { VerificationPage } from '../../features/auth/pages/VerificationPage.jsx';
+import { ForgotPasswordPage } from '../../features/auth/pages/ForgotPasswordPage.jsx';
+import { ResetPasswordPage } from '../../features/auth/pages/ResetPasswordPage.jsx';
 import AdminDashboardContainer from '../../shared/components/layout/AdminDashboardContainer.jsx';
 import PendingDepositRequestsView from '../../shared/components/layout/PendingDepositRequestsView.jsx';
 import AdminProfileSettingsView from '../../shared/components/layout/AdminProfileSettingsView.jsx';
@@ -22,6 +24,8 @@ export const AppRoutes = () => {
             <Route path="/login" element={<AuthPage />} />
             <Route path="/verify-email" element={<VerificationPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route
                 path="/clientdashboard"
                 element={
