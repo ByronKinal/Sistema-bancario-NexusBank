@@ -224,6 +224,16 @@ export const AdminDashboardContainer = () => {
                   <span className="text-xl mr-2">⏳</span>
                   Ir a Depósitos
                 </div>
+
+                {/* Pending Accounts Button */}
+                <div 
+                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                  onClick={() => navigate('/AdminDashboard/requests')}
+                >
+                  <span className="text-xl mr-2">📋</span>
+                  Ir a Pendientes
+                </div>
               </div>
 
               {/* Promotions - Right Column */}

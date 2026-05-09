@@ -9,6 +9,7 @@ import { UserEmail } from './userEmail.model.js';
 import { Role, UserRole } from './role.model.js';
 import { Account } from '../account/account.model.js';
 import config from '../../configs/config.js';
+import { Op } from 'sequelize';
 import sequelize from '../../configs/db.js';
 import { generateAccountNumber } from '../../helpers/account-generator.js';
 import { ERROR_CODES } from '../../helpers/error-catalog.js';
@@ -44,14 +45,16 @@ export const login = async (req, res) => {
     }
 
     let user = null;
-    const identifier = emailOrUsername || email;
+    const identifier = (emailOrUsername || email || '').trim();
 
-    if (identifier.includes && identifier.includes('@')) {
+    if (typeof identifier === 'string' && identifier.includes('@')) {
       // it's an email
       user = await User.findOne({ where: { email: identifier } });
     } else {
-      // treat as username -> find profile then user
-      const profile = await UserProfile.findOne({ where: { Username: identifier } });
+      // treat as username -> find profile then user (case-insensitive)
+      const profile = await UserProfile.findOne({
+        where: { Username: { [Op.iLike]: identifier } }
+      });
       if (profile) user = await User.findByPk(profile.UserId);
     }
     if (!user) {

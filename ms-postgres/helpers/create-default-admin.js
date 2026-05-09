@@ -23,8 +23,11 @@ export async function createDefaultAdmin() {
     defaults: { description: 'Usuario trabajador del banco' }
   });
 
+  // Buscar o crear el usuario admin
   let user = await User.findOne({ where: { email: adminEmail } });
+
   if (!user) {
+    // Primera vez: crear el usuario
     const hash = await bcrypt.hash(adminPassword, 10);
     user = await User.create({
       email: adminEmail,
@@ -32,15 +35,34 @@ export async function createDefaultAdmin() {
       status: true,
       isVerified: true
     });
-    await UserRole.create({
-      UserId: user.id,
-      RoleId: adminRole.id
-    });
-    await UserEmail.create({
-      userId: user.id,
-      email: adminEmail,
-      verified: true
-    });
+    console.log('✅ Administrador creado por primera vez.');
+  } else {
+    // Ya existe: resetear contraseña para asegurar que sea correcta
+    const hash = await bcrypt.hash(adminPassword, 10);
+    user.password = hash;
+    user.status = true;
+    user.isVerified = true;
+    await user.save();
+    console.log('🔄 Contraseña del administrador sincronizada.');
+  }
+
+  // Asegurar que el UserRole exista
+  const existingRole = await UserRole.findOne({ where: { UserId: user.id } });
+  if (!existingRole) {
+    await UserRole.create({ UserId: user.id, RoleId: adminRole.id });
+    console.log('✅ Rol de administrador asignado.');
+  }
+
+  // Asegurar que el UserEmail exista
+  const existingEmail = await UserEmail.findOne({ where: { userId: user.id } });
+  if (!existingEmail) {
+    await UserEmail.create({ userId: user.id, email: adminEmail, verified: true });
+    console.log('✅ Email de administrador registrado.');
+  }
+
+  // Asegurar que el UserProfile exista con el Username correcto
+  const existingProfile = await UserProfile.findOne({ where: { UserId: user.id } });
+  if (!existingProfile) {
     await UserProfile.create({
       Name: 'Administrador Banco',
       Username: adminUsername,
@@ -53,8 +75,12 @@ export async function createDefaultAdmin() {
       Status: true,
       UserId: user.id
     });
-    console.log('Administrador creado: ADMINB/ADMINB');
-  } else {
-    console.log('Administrador ya existe.');
+    console.log('✅ Perfil de administrador creado.');
+  } else if (existingProfile.Username !== adminUsername) {
+    existingProfile.Username = adminUsername;
+    await existingProfile.save();
+    console.log('🔄 Username de administrador corregido a ADMINB.');
   }
+
+  console.log(`🚀 Admin listo → usuario: ${adminUsername} / contraseña: ${adminPassword}`);
 }

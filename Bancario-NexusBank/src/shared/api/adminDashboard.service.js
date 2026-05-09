@@ -1,9 +1,46 @@
-import { axiosAdmin } from './api.js';
+import axios from 'axios';
+import { useAuthStore } from '../../features/auth/store/authStore.js';
+
+const adminBaseURL = import.meta.env.VITE_BANKING_API_URL || import.meta.env.VITE_AUTH_URL || 'http://localhost:3007/api/v1';
+
+const axiosAdminBanking = axios.create({
+  baseURL: adminBaseURL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+const getAuthHeaders = () => {
+  const token = useAuthStore.getState().token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+axiosAdminBanking.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+const adminRequest = async (method, url, dataOrConfig, maybeConfig) => {
+  if (method === 'get') {
+    return axiosAdminBanking.get(url, dataOrConfig);
+  }
+  if (method === 'post') {
+    return axiosAdminBanking.post(url, dataOrConfig, maybeConfig);
+  }
+  if (method === 'put') {
+    return axiosAdminBanking.put(url, dataOrConfig, maybeConfig);
+  }
+  throw new Error(`Unsupported method: ${method}`);
+};
 
 export const adminDashboardService = {
   getUsers: async (limit = 100) => {
     try {
-      const response = await axiosAdmin.get('/users', { params: { limit } });
+      const response = await adminRequest('get', '/users', { params: { limit } });
       return response.data;
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -13,7 +50,7 @@ export const adminDashboardService = {
 
   getTransactions: async (limit = 50) => {
     try {
-      const response = await axiosAdmin.get('/admin/transactions', { params: { limit } });
+      const response = await adminRequest('get', '/admin/transactions', { params: { limit } });
       return response.data;
     } catch (error) {
       console.error('Error fetching admin transactions:', error);
@@ -24,7 +61,7 @@ export const adminDashboardService = {
   getAccounts: async () => {
     try {
       // Usamos el endpoint global de accounts, que para los administradores retorna todas las cuentas.
-      const response = await axiosAdmin.get('/accounts');
+      const response = await adminRequest('get', '/accounts');
       return response.data;
     } catch (error) {
       console.error('Error fetching admin accounts:', error);
@@ -34,7 +71,7 @@ export const adminDashboardService = {
 
   getDepositRequests: async () => {
     try {
-      const response = await axiosAdmin.get('/accounts/deposit-requests');
+      const response = await adminRequest('get', '/accounts/deposit-requests');
       return response.data;
     } catch (error) {
       console.error('Error fetching deposit requests:', error);
@@ -44,7 +81,7 @@ export const adminDashboardService = {
 
   approveDeposit: async (id) => {
     try {
-      const response = await axiosAdmin.put(`/accounts/deposit-requests/${id}/approve`);
+      const response = await adminRequest('put', `/accounts/deposit-requests/${id}/approve`);
       return response.data;
     } catch (error) {
       console.error('Error approving deposit:', error);
@@ -54,7 +91,7 @@ export const adminDashboardService = {
 
   rejectDeposit: async (id) => {
     try {
-      const response = await axiosAdmin.put(`/accounts/deposit-requests/${id}/revert`);
+      const response = await adminRequest('put', `/accounts/deposit-requests/${id}/revert`);
       return response.data;
     } catch (error) {
       console.error('Error rejecting deposit:', error);
@@ -64,7 +101,7 @@ export const adminDashboardService = {
 
   approveAccount: async (id) => {
     try {
-      const response = await axiosAdmin.post(`/admin/accounts/${id}/enable`);
+      const response = await adminRequest('post', `/admin/accounts/${id}/enable`);
       return response.data;
     } catch (error) {
       console.error('Error approving account:', error);
@@ -74,7 +111,7 @@ export const adminDashboardService = {
 
   rejectAccount: async (id) => {
     try {
-      const response = await axiosAdmin.post(`/admin/accounts/${id}/reject`);
+      const response = await adminRequest('post', `/admin/accounts/${id}/reject`);
       return response.data;
     } catch (error) {
       console.error('Error rejecting account:', error);

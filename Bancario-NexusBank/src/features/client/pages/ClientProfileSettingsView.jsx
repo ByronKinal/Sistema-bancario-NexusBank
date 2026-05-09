@@ -2,10 +2,28 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { adminProfileService } from '../../../shared/api/adminProfile.service.js';
-import { axiosClient } from '../../../shared/api/api.js';
+import axios from 'axios';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 import '../../../styles/adminDashboard.css';
+
+const profilePhotoBaseURL = import.meta.env.VITE_BANKING_API_URL || import.meta.env.VITE_AUTH_URL || 'http://localhost:3007/api/v1';
+
+const axiosProfilePhoto = axios.create({
+	baseURL: profilePhotoBaseURL,
+	timeout: 10000,
+	headers: {
+		'Content-Type': 'application/json',
+	},
+});
+
+axiosProfilePhoto.interceptors.request.use((config) => {
+	const token = useAuthStore.getState().token;
+	if (token) {
+		config.headers.Authorization = `Bearer ${token}`;
+	}
+	return config;
+});
 
 const roleLabelMap = {
 	Admin: 'Administrador',
@@ -164,7 +182,7 @@ export const ClientProfileSettingsView = () => {
 			const formData = new FormData();
 			formData.append('photo', file);
 
-			const response = await axiosClient.post('/auth/profile/photo', formData, {
+			const response = await axiosProfilePhoto.post('/auth/profile/photo', formData, {
 				headers: { 'Content-Type': 'multipart/form-data' },
 			});
 

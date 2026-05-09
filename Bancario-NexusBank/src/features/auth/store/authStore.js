@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { login as loginRequest } from '../../../shared/api/auth.js';
-import { axiosClient } from '../../../shared/api/api.js';
+import { axiosAuth } from '../../../shared/api/api.js';
 
 export const useAuthStore = create(
   persist(
@@ -94,7 +94,11 @@ export const useAuthStore = create(
             };
           }
 
-          const response = await axiosClient.get('/auth/profile');
+          const response = await axiosAuth.get('/auth/profile', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
           const profile = response.data?.profile || {};
 
           set((state) => {

@@ -8,9 +8,10 @@ import ClientProfileSettingsView from '../../features/client/pages/ClientProfile
 import { RegisterPage } from '../../features/auth/pages/RegisterPage.jsx';
 import { VerificationPage } from '../../features/auth/pages/VerificationPage.jsx';
 import AdminDashboardContainer from '../../shared/components/layout/AdminDashboardContainer.jsx';
-import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
+import PendingDepositRequestsView from '../../shared/components/layout/PendingDepositRequestsView.jsx';
 import AdminProfileSettingsView from '../../shared/components/layout/AdminProfileSettingsView.jsx';
 import { Deposits } from '../../features/client/pages/Deposits.jsx';
+import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
 
 export const AppRoutes = () => {
     return (
@@ -50,6 +51,14 @@ export const AppRoutes = () => {
             />
             <Route
                 path="/AdminDashboard/deposits"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <PendingDepositRequestsView />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/AdminDashboard/requests"
                 element={
                     <ProtectedRoute requiredRole="Admin">
                         <PendingRequestsView />
