@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { useClientStore } from '../store/useClientStore.js';
 import { clientDepositService } from '../../../shared/api/clientDeposit.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 
 export const Deposits = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const { accounts, transactions, loading, error, fetchAllAccounts, fetchRecentTransactions, clearError } = useClientStore();
   const [selectedAccountNumber, setSelectedAccountNumber] = useState('');
+  const [useManualDestination, setUseManualDestination] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -24,6 +29,25 @@ export const Deposits = () => {
       clearError();
     }
   }, [error, clearError]);
+
+  useEffect(() => {
+    const prefill = location.state;
+    if (!prefill) return;
+
+    const destination = String(prefill.prefillDestinationAccountNumber || '').trim();
+
+    if (destination) {
+      const isOwnAccount = accounts.some((account) => String(account.accountNumber) === destination);
+      setUseManualDestination(!isOwnAccount);
+      setSelectedAccountNumber(destination);
+    }
+
+    if (prefill.prefillDescription) {
+      setDescription(prefill.prefillDescription);
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [accounts, location.pathname, location.state, navigate]);
 
   const recentDeposits = useMemo(() => {
     const history = Array.isArray(transactions)
@@ -278,19 +302,39 @@ export const Deposits = () => {
           <h2 className="text-xl font-bold text-[#1A2E52] mb-4">Formulario de Depósito</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Cuenta destino</label>
-              <select
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:border-[#2D5899] focus:outline-none"
-                value={selectedAccountNumber}
-                onChange={(e) => setSelectedAccountNumber(e.target.value)}
-              >
-                <option value="">Selecciona una cuenta</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.accountNumber}>
-                    {account.accountNumber} — {account.accountType || 'Cuenta'}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <label className="block text-sm font-semibold text-gray-700">Cuenta destino</label>
+                <button
+                  type="button"
+                  onClick={() => setUseManualDestination((prev) => !prev)}
+                  className="text-xs font-semibold text-[#2D5899] hover:text-[#1A2E52]"
+                >
+                  {useManualDestination ? 'Usar mis cuentas' : 'Ingresar manual'}
+                </button>
+              </div>
+
+              {useManualDestination ? (
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                  value={selectedAccountNumber}
+                  onChange={(e) => setSelectedAccountNumber(e.target.value)}
+                  placeholder="Ej: 001-9115890794-1"
+                />
+              ) : (
+                <select
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                  value={selectedAccountNumber}
+                  onChange={(e) => setSelectedAccountNumber(e.target.value)}
+                >
+                  <option value="">Selecciona una cuenta</option>
+                  {accounts.map((account) => (
+                    <option key={account.id || account.accountNumber} value={account.accountNumber}>
+                      {account.accountNumber} — {account.accountType || 'Cuenta'}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>

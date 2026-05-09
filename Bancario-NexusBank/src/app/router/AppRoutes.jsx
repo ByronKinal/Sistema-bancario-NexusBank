@@ -12,6 +12,7 @@ import PendingDepositRequestsView from '../../shared/components/layout/PendingDe
 import AdminProfileSettingsView from '../../shared/components/layout/AdminProfileSettingsView.jsx';
 import { Deposits } from '../../features/client/pages/Deposits.jsx';
 import { Transfers } from '../../features/client/pages/Transfers.jsx';
+import Favorites from '../../features/client/pages/Favorites.jsx';
 import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
 
 export const AppRoutes = () => {
@@ -33,6 +34,7 @@ export const AppRoutes = () => {
                 <Route path="profile-settings" element={<ClientProfileSettingsView />} />
                 <Route path="deposits" element={<Deposits />} />
                 <Route path="transfers" element={<Transfers />} />
+                <Route path="favorites" element={<Favorites />} />
             </Route>
             
             <Route

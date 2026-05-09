@@ -13,6 +13,7 @@ export const Sidebar = () => {
     { path: '/clientdashboard/accounts', label: 'Mis Cuentas', icon: '💳' },
     { path: '/clientdashboard/deposits', label: 'Depósitos', icon: '💰' },
     { path: '/clientdashboard/transfers', label: 'Transferencias', icon: '💸' },
+    { path: '/clientdashboard/favorites', label: 'Favoritos', icon: '⭐' },
     { path: '/clientdashboard/transactions', label: 'Movimientos', icon: '📋' },
     { path: '/clientdashboard/profile-settings', label: 'Ajustes de perfil', icon: '👤' },
   ];

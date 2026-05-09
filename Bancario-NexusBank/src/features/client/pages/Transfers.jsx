@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { useClientStore } from '../store/useClientStore.js';
 import { clientTransferService } from '../../../shared/api/clientTransfer.service.js';
@@ -33,6 +34,9 @@ const normalizeTransfer = (transfer, fallback = {}) => {
 };
 
 export const Transfers = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const {
     accounts,
     transactions,
@@ -71,6 +75,32 @@ export const Transfers = () => {
       setSourceAccountNumber(accounts[0].accountNumber || '');
     }
   }, [accounts, sourceAccountNumber]);
+
+  useEffect(() => {
+    const prefill = location.state;
+    if (!prefill) return;
+
+    if (prefill.prefillSourceAccountNumber) {
+      setSourceAccountNumber(prefill.prefillSourceAccountNumber);
+    }
+
+    if (prefill.prefillDestinationAccountNumber) {
+      setDestinationAccountNumber(prefill.prefillDestinationAccountNumber);
+    }
+
+    if (prefill.prefillRecipientType) {
+      setRecipientType(prefill.prefillRecipientType);
+    }
+
+    if (prefill.prefillDescription) {
+      setDescription(prefill.prefillDescription);
+    }
+
+    setCurrentStep(1);
+    setPendingTransfer(null);
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const sourceAccount = useMemo(
     () => accounts.find((account) => String(account.accountNumber) === String(sourceAccountNumber)) || null,
