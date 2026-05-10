@@ -23,9 +23,12 @@ export const LoginForm = ({ onForgot }) => {
       const user = result.data?.userDetails || useAuthStore.getState().user;
 
       const isAdmin = user?.role === 'PLATFORM_ADMIN' || user?.role === 'Admin' || user?.role === 'Administrador';
+      const isEmployee = user?.role === 'Employee' || user?.role === 'Empleado' || user?.role === 'EMPLEADO' || user?.role === 'empleado';
 
       if (isAdmin) {
         navigate('/AdminDashboard');
+      } else if (isEmployee) {
+        navigate('/EmployeeDashboard');
       } else {
         navigate('/clientdashboard');
       }
@@ -67,7 +70,7 @@ export const LoginForm = ({ onForgot }) => {
 
       <div className="auth-inline-row">
         <label className="auth-remember">
-          <input type="checkbox" style={{ accentColor: '#2D5899' }} />          
+          <input type="checkbox" style={{ accentColor: '#2D5899' }} />
           Recordarme
         </label>
       </div>

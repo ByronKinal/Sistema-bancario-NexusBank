@@ -16,6 +16,9 @@ import { Deposits } from '../../features/client/pages/Deposits.jsx';
 import { Transfers } from '../../features/client/pages/Transfers.jsx';
 import Favorites from '../../features/client/pages/Favorites.jsx';
 import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
+import EmployeDashnoardContainer from '../../shared/components/layout/EmployeDashnoardContainer.jsx';
+import EmployeeProfileSettingsView from '../../shared/components/layout/EmployeeProfileSettingsView.jsx';
+import AdminEmployeesView from '../../shared/components/layout/AdminEmployeesView.jsx';
 
 export const AppRoutes = () => {
     return (
@@ -26,10 +29,12 @@ export const AppRoutes = () => {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+            {/* ── Cliente ── */}
             <Route
                 path="/clientdashboard"
                 element={
-                    <ProtectedRoute>
+                    <ProtectedRoute excludeRole="Empleado">
                         <ClientDashboardLayout />
                     </ProtectedRoute>
                 }
@@ -40,7 +45,8 @@ export const AppRoutes = () => {
                 <Route path="transfers" element={<Transfers />} />
                 <Route path="favorites" element={<Favorites />} />
             </Route>
-            
+
+            {/* ── Admin ── */}
             <Route
                 path="/AdminDashboard"
                 element={
@@ -57,11 +63,12 @@ export const AppRoutes = () => {
                     </ProtectedRoute>
                 }
             />
+
             <Route
-                path="/AdminDashboard/deposits"
+                path="/AdminDashboard/employees"
                 element={
                     <ProtectedRoute requiredRole="Admin">
-                        <PendingDepositRequestsView />
+                        <AdminEmployeesView />
                     </ProtectedRoute>
                 }
             />
@@ -70,6 +77,32 @@ export const AppRoutes = () => {
                 element={
                     <ProtectedRoute requiredRole="Admin">
                         <PendingRequestsView />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* ── Empleado ── */}
+            <Route
+                path="/EmployeeDashboard"
+                element={
+                    <ProtectedRoute requiredRole="Empleado">
+                        <EmployeDashnoardContainer />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/EmployeeDashboard/deposits"
+                element={
+                    <ProtectedRoute requiredRole="Empleado">
+                        <EmployeDashnoardContainer />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/EmployeeDashboard/profile-settings"
+                element={
+                    <ProtectedRoute requiredRole="Empleado">
+                        <EmployeeProfileSettingsView />
                     </ProtectedRoute>
                 }
             />

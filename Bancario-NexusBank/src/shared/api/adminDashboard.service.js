@@ -117,5 +117,15 @@ export const adminDashboardService = {
       console.error('Error rejecting account:', error);
       throw error;
     }
+  },
+
+  getEmployeesStats: async () => {
+    try {
+      const response = await adminRequest('get', '/users/employees/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching employees stats:', error);
+      throw error;
+    }
   }
 };

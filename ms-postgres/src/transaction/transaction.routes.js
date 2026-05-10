@@ -29,9 +29,9 @@ router.get('/accounts/transfers/:transferId', verifyTokenAndGetUser, verifyRoles
 
 router.put('/accounts/transfers/:id/revert', verifyTokenAndGetUser, verifyRoles(['Client']), revertTransfer);
 
-router.get('/my-account/history', verifyTokenAndGetUser, verifyRoles(['Client']), getMyAccountHistory);
-router.get('/client/transactions', verifyTokenAndGetUser, verifyRoles(['Client']), validateClientTransactionsQuery, getMyTransactions);
-router.get('/admin/transactions', verifyTokenAndGetUser, verifyRoles(['Admin']), validateAdminTransactionsQuery, getAdminTransactions);
+router.get('/my-account/history', verifyTokenAndGetUser, verifyRoles(['Client', 'Employee']), getMyAccountHistory);
+router.get('/client/transactions', verifyTokenAndGetUser, verifyRoles(['Client', 'Employee']), validateClientTransactionsQuery, getMyTransactions);
+router.get('/admin/transactions', verifyTokenAndGetUser, verifyRoles(['Admin', 'Employee']), validateAdminTransactionsQuery, getAdminTransactions);
 router.get('/employee/accounts/:accountId/transactions', verifyTokenAndGetUser, verifyRoles(['Employee']), validateEmployeeAccountTransactions, getEmployeeAccountTransactions);
 
 export default router;

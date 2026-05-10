@@ -5,12 +5,15 @@ import {
   getAllUsers,
   getUserById,
   getAdminClientDetail,
-  updateUser
+  updateUser,
+  getEmployeesStats
 } from './user.controller.js';
 import { validateBearerToken } from '../../middlewares/auth-middleware.js';
 import { verifyIsAdmin } from '../../middlewares/role-middleware.js';
 
 const router = Router();
+
+router.get('/employees/stats', validateBearerToken, verifyIsAdmin, getEmployeesStats);
 
 router.get('/', validateBearerToken, verifyIsAdmin, getAllUsers);
 

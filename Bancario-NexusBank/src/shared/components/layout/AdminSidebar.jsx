@@ -27,10 +27,10 @@ const AdminSidebar = () => {
           </div>
           <div style={{...item, marginTop:6}}>Usuarios <span style={{marginLeft:6, background:'#ff4757', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#fff'}}>142</span></div>
           <div 
-            style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/deposits' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/deposits' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/deposits' ? 700 : 400}}
-            onClick={() => navigate('/AdminDashboard/deposits')}
+            style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/employees' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/employees' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/employees' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/employees')}
           >
-            Depósitos
+            Empleados
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import sequelize, { dbConnection } from './configs/db.js';
 import { initializeAssociations } from './helpers/model-associations.js';
 import { createDefaultAdmin } from './helpers/create-default-admin.js';
+import { createDefaultEmployee } from './helpers/create-default-employee.js';
 import { BASE_PATH, createApp } from './configs/app.js';
 
 dotenv.config();
@@ -20,6 +21,7 @@ const start = async () => {
     await dbConnection();
 
     await createDefaultAdmin();
+    await createDefaultEmployee();
 
     app.listen(PORT, () => {
       console.log(`ms-postgres running on port ${PORT}`);

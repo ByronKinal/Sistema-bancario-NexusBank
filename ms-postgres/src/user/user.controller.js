@@ -1,11 +1,13 @@
 'use strict';
 
 import { Op } from 'sequelize';
+import sequelize from '../../configs/db.js';
 import { User, UserProfile } from './user.model.js';
 import { UserEmail } from '../auth/userEmail.model.js';
 import { Role, UserRole } from '../auth/role.model.js';
 import { Account } from '../account/account.model.js';
 import { Transaction } from '../transaction/transaction.model.js';
+import { Deposit } from '../deposit/deposit.model.js';
 import { SensitiveQueryAudit } from './sensitiveAudit.model.js';
 import { sendError, sendSuccess } from '../../helpers/response.js';
 import { ERROR_CODES } from '../../helpers/error-catalog.js';
@@ -565,3 +567,70 @@ export const editOwnProfile = async (req, res) => {
   }
 };
 
+export const getEmployeesStats = async (req, res) => {
+  try {
+    const employeeRole = await Role.findOne({ where: { name: 'Empleado' } });
+    if (!employeeRole) {
+      return sendSuccess(res, { status: 200, message: 'No hay empleados', data: { employees: [] } });
+    }
+
+    const employeeUserRoles = await UserRole.findAll({
+      where: { RoleId: employeeRole.id },
+      attributes: ['UserId']
+    });
+
+    const employeeIds = employeeUserRoles.map(ur => ur.UserId);
+    if (employeeIds.length === 0) {
+      return sendSuccess(res, { status: 200, message: 'No hay empleados', data: { employees: [] } });
+    }
+
+    const employees = await User.findAll({
+      where: { id: { [Op.in]: employeeIds } },
+      attributes: ['id', 'email', 'status', 'createdAt', 'lastLogin'],
+      include: [
+        { model: UserProfile, as: 'UserProfile', attributes: ['Name', 'Username', 'PhoneNumber', 'ProfilePhotoUrl'] }
+      ]
+    });
+
+    const statsPromises = employees.map(async (emp) => {
+      const empId = emp.id;
+
+      const approved = await Deposit.count({
+        where: { type: 'DEPOSITO', status: 'COMPLETADA', description: { [Op.iLike]: `%Aprobada por ${empId}%` } }
+      });
+
+      const reverted = await Deposit.count({
+        where: { type: 'DEPOSITO', revertedBy: empId }
+      });
+
+      return {
+        id: empId,
+        email: emp.email,
+        status: emp.status,
+        createdAt: emp.createdAt,
+        lastLogin: emp.lastLogin,
+        name: emp.UserProfile?.Name || emp.UserProfile?.Username || emp.email,
+        username: emp.UserProfile?.Username || '—',
+        phone: emp.UserProfile?.PhoneNumber || '—',
+        profilePhotoUrl: emp.UserProfile?.ProfilePhotoUrl || null,
+        stats: { approved, reverted, totalProcessed: approved + reverted }
+      };
+    });
+
+    const employeesWithStats = await Promise.all(statsPromises);
+
+    return sendSuccess(res, {
+      status: 200,
+      message: 'Estadísticas de empleados obtenidas exitosamente',
+      data: { employees: employeesWithStats }
+    });
+  } catch (err) {
+    console.error('Error al obtener estadísticas de empleados:', err);
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Error al obtener estadísticas de empleados',
+      details: err.message
+    });
+  }
+};
