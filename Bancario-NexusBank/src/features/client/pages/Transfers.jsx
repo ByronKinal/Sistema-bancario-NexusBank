@@ -14,6 +14,17 @@ const recipientTypes = [
 
 const formatAmount = (value) => Number(value || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 });
 
+const getAccountTypeLabel = (account) => {
+  const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
+
+  if (!rawType) return 'Cuenta';
+  if (rawType.includes('corrient') || rawType.includes('monetar')) return 'Cuenta corriente';
+  if (rawType.includes('ahor')) return 'Cuenta de ahorro';
+  if (rawType.startsWith('cuenta')) return rawType.charAt(0).toUpperCase() + rawType.slice(1);
+
+  return `Cuenta ${rawType}`;
+};
+
 const normalizeTransfer = (transfer, fallback = {}) => {
   const amount = Number(transfer?.amount ?? fallback.amount ?? 0);
   const id = transfer?.id || transfer?.transactionId || transfer?._id || transfer?.reference || fallback.id || `${Date.now()}-${Math.random()}`;
@@ -354,6 +365,11 @@ export const Transfers = () => {
         balanceAfter: transferData.balanceAfter ?? transferData.newBalance ?? null,
       });
 
+      await Promise.all([
+        fetchAllAccounts(),
+        fetchRecentTransactions(10),
+      ]);
+
       setRecentTransfers((prev) => [savedTransfer, ...prev].slice(0, 8));
       setSelectedTransferId(savedTransfer.id);
       showSuccess('Transferencia procesada correctamente.');
@@ -454,7 +470,7 @@ export const Transfers = () => {
                     <option value="">Selecciona cuenta origen</option>
                     {accounts.map((account) => (
                       <option key={account.id || account.accountNumber} value={account.accountNumber}>
-                        {account.accountNumber} — {account.name || account.accountType || 'Cuenta'}
+                        {account.accountNumber} — {getAccountTypeLabel(account)}
                       </option>
                     ))}
                   </select>
@@ -471,7 +487,7 @@ export const Transfers = () => {
                       <option value="">Selecciona cuenta destino</option>
                       {accounts.map((account) => (
                         <option key={account.id || account.accountNumber} value={account.accountNumber}>
-                          {account.accountNumber} — {account.name || account.accountType || 'Cuenta'}
+                          {account.accountNumber} — {getAccountTypeLabel(account)}
                         </option>
                       ))}
                     </select>
@@ -610,7 +626,7 @@ export const Transfers = () => {
             <div className="relative z-10">
               <p className="text-[#E8D8A0] text-sm font-semibold uppercase tracking-[0.24em]">Mi cuenta seleccionada</p>
               <h3 className="mt-3 text-4xl font-bold">Q {formatAmount(availableBalance)}</h3>
-              <p className="mt-2 text-white/70 text-sm">{sourceAccount?.name || sourceAccount?.accountType || 'Cuenta principal'}</p>
+              <p className="mt-2 text-white/70 text-sm">{sourceAccount ? getAccountTypeLabel(sourceAccount) : 'Cuenta principal'}</p>
               <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-2xl bg-white/10 p-3">
                   <p className="text-white/60">Origen</p>

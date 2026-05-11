@@ -17,8 +17,7 @@ export const AdminDashboardContainer = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
   
   const [stats, setStats] = useState({ totalUsers: 0, transactionsToday: 0, pendingAccounts: 0 });
   const [movementsData, setMovementsData] = useState([]);
@@ -35,8 +34,9 @@ export const AdminDashboardContainer = () => {
         ]);
 
         const transactions = Array.isArray(txRes.data) ? txRes.data : [];
+        const orderedTransactions = [...transactions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         const today = new Date();
-        const txTodayCount = transactions.filter(tx => new Date(tx.createdAt).toDateString() === today.toDateString()).length;
+        const txTodayCount = orderedTransactions.filter(tx => new Date(tx.createdAt).toDateString() === today.toDateString()).length;
         const accounts = accRes.data || [];
 
         setStats({
@@ -45,7 +45,7 @@ export const AdminDashboardContainer = () => {
           pendingAccounts: accounts.filter(acc => acc.status === false).length
         });
 
-          const mappedTransactions = transactions.map(tx => {
+          const mappedTransactions = orderedTransactions.map(tx => {
           const isPositive = !['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type);
           return {
             id: tx.id,
@@ -83,9 +83,16 @@ export const AdminDashboardContainer = () => {
     return matchSearch && matchType;
   });
 
-  const totalPages = Math.ceil(filteredMovements.length / itemsPerPage);
-  const startIdx = (currentPage - 1) * itemsPerPage;
-  const currentMovements = filteredMovements.slice(startIdx, startIdx + itemsPerPage);
+  const currentMovements = filteredMovements.slice(0, itemsPerPage);
+
+  const getMovementTypeLabel = (type) => {
+    if (!type) return 'Movimiento';
+    if (type.includes('TRANSFERENCIA')) return 'Transferencia';
+    if (type.includes('DEPOSITO')) return 'Depósito';
+    if (type.includes('RETIRO')) return 'Retiro';
+    if (type.includes('COMPRA')) return 'Compra';
+    return type.replaceAll('_', ' ');
+  };
 
   const getAmountColor = (type) => {
     if (type === 'positive') return '#10b981';
@@ -106,7 +113,7 @@ export const AdminDashboardContainer = () => {
             <div className="stats-grid">
               <StatCard title="Total usuarios" value={loading ? '...' : stats.totalUsers} subtitle="+12 este mes" color="blue" />
               <StatCard title="Transacciones hoy" value={loading ? '...' : stats.transactionsToday} subtitle="Hoy" color="light-blue" />
-              <StatCard title="Cuentas pendientes" value={loading ? '...' : stats.pendingAccounts} subtitle="Requieren acción" color="light-red" />
+              <StatCard title="Cuentas revertidas" value={loading ? '...' : stats.pendingAccounts} subtitle="Requieren acción" color="light-red" />
             </div>
 
             {/* Movimientos Table Section */}
@@ -122,7 +129,6 @@ export const AdminDashboardContainer = () => {
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
-                      setCurrentPage(1);
                     }}
                   />
                   <select
@@ -130,14 +136,11 @@ export const AdminDashboardContainer = () => {
                     value={filterType}
                     onChange={(e) => {
                       setFilterType(e.target.value);
-                      setCurrentPage(1);
                     }}
                   >
                     <option value="ALL">Todos los tipos</option>
                     <option value="DEPOSITO">Depósitos</option>
-                    <option value="RETIRO">Retiros</option>
                     <option value="TRANSFERENCIA">Transferencias</option>
-                    <option value="COMPRA">Compras</option>
                   </select>
                 </div>
               </div>
@@ -160,10 +163,10 @@ export const AdminDashboardContainer = () => {
                         const badge = getStatusBadge(movement.amountType);
                         return (
                           <tr key={movement.id}>
-                            <td className="font-medium text-xs">{movement.type.replace('_', ' ')}</td>
+                            <td className="font-medium text-xs">{getMovementTypeLabel(movement.type)}</td>
                             <td>{movement.userName}</td>
                             <td className="date-column">{movement.date}</td>
-                            <td className={`amount-${movement.amountType}`}>
+                            <td className={`amount-${movement.amountType} whitespace-nowrap`}>
                               {movement.amount}
                             </td>
                             <td>
@@ -185,44 +188,20 @@ export const AdminDashboardContainer = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="pagination-container">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Quick Actions and Promotions */}
             <div className="actions-promotions-grid">
               {/* Accesos Rápidos - Left Column */}
               <div className="quick-actions-section glass-panel shadow-md rounded-2xl border border-white/40 p-5">
-                <h3 className="section-title">Accesos rápidos</h3>
-                <div className="actions-grid">
-                  {['Usuarios', 'Depósitos', 'Transacciones', 'Pendientes'].map((action, i) => (
-                    <div key={i} className="action-card">
-                      <div className="action-title">{action}</div>
-                      <div className="action-subtitle">Ver detalles</div>
-                    </div>
-                  ))}
-                </div>
-                
                 {/* Yellow Button Requested by User */}
                 <div 
                   className="mt-6 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #C8A84B, #b0933e)' }}
-                  onClick={() => navigate('/AdminDashboard/deposits')}
+                  onClick={() => navigate('/AdminDashboard/employees')}
                 >
                   <span className="text-xl mr-2">⏳</span>
-                  Ir a Depósitos
+                  Ir a Empleados
                 </div>
 
                 {/* Pending Accounts Button */}

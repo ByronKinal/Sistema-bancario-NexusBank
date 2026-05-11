@@ -5,6 +5,17 @@ import { useClientStore } from '../store/useClientStore.js';
 import { clientDepositService } from '../../../shared/api/clientDeposit.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 
+const getAccountTypeLabel = (account) => {
+  const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
+
+  if (!rawType) return 'Cuenta';
+  if (rawType.includes('corrient') || rawType.includes('monetar')) return 'Cuenta corriente';
+  if (rawType.includes('ahor')) return 'Cuenta de ahorro';
+  if (rawType.startsWith('cuenta')) return rawType.charAt(0).toUpperCase() + rawType.slice(1);
+
+  return `Cuenta ${rawType}`;
+};
+
 export const Deposits = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -330,7 +341,7 @@ export const Deposits = () => {
                   <option value="">Selecciona una cuenta</option>
                   {accounts.map((account) => (
                     <option key={account.id || account.accountNumber} value={account.accountNumber}>
-                      {account.accountNumber} — {account.accountType || 'Cuenta'}
+                      {account.accountNumber} — {getAccountTypeLabel(account)}
                     </option>
                   ))}
                 </select>

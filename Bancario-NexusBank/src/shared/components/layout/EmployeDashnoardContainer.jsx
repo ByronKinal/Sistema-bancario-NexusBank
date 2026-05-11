@@ -9,7 +9,7 @@ const EmployeDashnoardContainer = () => {
     const [selectedDepositId, setSelectedDepositId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('PENDIENTE');
+    const [filterStatus, setFilterStatus] = useState('TODOS');
 
     const getDisplayStatus = (status) => {
         if (status === 'PENDIENTE') return 'PENDIENTE';
@@ -21,6 +21,12 @@ const EmployeDashnoardContainer = () => {
         if (status === 'PENDIENTE') return 'badge-pendiente';
         if (status === 'COMPLETADA') return 'badge-ingreso';
         return 'badge-egreso';
+    };
+
+    const getDepositMethodLabel = (channel) => {
+        if (!channel) return 'Ventanilla / caja';
+        if (channel.toLowerCase().includes('transferencia')) return 'Ventanilla / caja';
+        return channel;
     };
 
     const fetchDeposits = async () => {
@@ -39,7 +45,7 @@ const EmployeDashnoardContainer = () => {
                     userId: dep.relatedAccountId || 'N/D',
                     description: dep.description || 'Pago por servicio',
                     date: dep.createdAt || dep.updatedAt || new Date().toISOString(),
-                    method: dep.channel || 'Transferencia en línea',
+                    method: getDepositMethodLabel(dep.channel),
                     ipAddress: dep.ipAddress || 'N/D',
                     device: dep.device || 'N/D',
                     location: dep.location || 'N/D',
@@ -69,11 +75,13 @@ const EmployeDashnoardContainer = () => {
         const searchValue = `${deposit.id} ${deposit.accountNumber} ${deposit.bank} ${deposit.description}`.toLowerCase();
         const matchesSearch = searchValue.includes(searchTerm.toLowerCase());
         const statusMatch =
-            filterStatus === 'PENDIENTE'
-                ? deposit.status === 'PENDIENTE'
-                : filterStatus === 'APROBADO'
-                    ? deposit.status === 'COMPLETADA'
-                    : ['FALLIDA', 'REVERTIDA'].includes(deposit.status);
+            filterStatus === 'TODOS'
+                ? true
+                : filterStatus === 'PENDIENTE'
+                    ? deposit.status === 'PENDIENTE'
+                    : filterStatus === 'APROBADO'
+                        ? deposit.status === 'COMPLETADA'
+                        : ['FALLIDA', 'REVERTIDA'].includes(deposit.status);
         return matchesSearch && statusMatch;
     });
 
@@ -139,11 +147,6 @@ const EmployeDashnoardContainer = () => {
                             <div className="stat-value">{summary.approved}</div>
                             <div className="stat-subtitle positive">Procesados</div>
                         </div>
-                        <div className="stat-card light-red">
-                            <div className="stat-label">Rechazados</div>
-                            <div className="stat-value">{summary.rejected}</div>
-                            <div className="stat-subtitle negative">Solicitudes fallidas o revertidas</div>
-                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
@@ -166,9 +169,9 @@ const EmployeDashnoardContainer = () => {
                                         value={filterStatus}
                                         onChange={(e) => setFilterStatus(e.target.value)}
                                     >
+                                        <option value="TODOS">Todos</option>
                                         <option value="PENDIENTE">Pendientes</option>
                                         <option value="APROBADO">Aprobados</option>
-                                        <option value="RECHAZADO">Rechazados</option>
                                     </select>
                                 </div>
                             </div>
@@ -222,17 +225,7 @@ const EmployeDashnoardContainer = () => {
                                                             >
                                                                 Aprobar
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleReject(deposit);
-                                                                }}
-                                                                disabled={deposit.status !== 'PENDIENTE'}
-                                                                className={`px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition ${deposit.status === 'PENDIENTE' ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-300 cursor-not-allowed'}`}
-                                                            >
-                                                                Rechazar
-                                                            </button>
+                                                            {/* Rechazar eliminado: acción no disponible en la UI de empleado */}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -284,9 +277,7 @@ const EmployeDashnoardContainer = () => {
                                             <div className="flex justify-between"><span className="font-semibold">Fecha / Hora</span><span>{new Date(selectedDeposit.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span></div>
                                             <div className="flex justify-between"><span className="font-semibold">Método / Canal</span><span>{selectedDeposit.method}</span></div>
                                             <div className="flex justify-between"><span className="font-semibold">Descripción</span><span>{selectedDeposit.description}</span></div>
-                                            <div className="flex justify-between"><span className="font-semibold">Dirección IP</span><span>{selectedDeposit.ipAddress}</span></div>
-                                            <div className="flex justify-between"><span className="font-semibold">Dispositivo</span><span>{selectedDeposit.device}</span></div>
-                                            <div className="flex justify-between"><span className="font-semibold">Ubicación</span><span>{selectedDeposit.location}</span></div>
+                                            {/* Campos sensibles eliminados: Dirección IP, Dispositivo, Ubicación */}
                                         </div>
                                     </div>
 
@@ -299,14 +290,7 @@ const EmployeDashnoardContainer = () => {
                                         >
                                             Aprobar Depósito
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleReject(selectedDeposit)}
-                                            disabled={selectedDeposit.status !== 'PENDIENTE'}
-                                            className="rounded-2xl bg-red-600 text-white py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            Rechazar Depósito
-                                        </button>
+                                        {/* Botón Rechazar eliminado: no disponible para empleados */}
                                     </div>
                                 </div>
                             ) : (

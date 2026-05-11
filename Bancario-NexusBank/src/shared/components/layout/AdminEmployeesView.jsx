@@ -101,10 +101,9 @@ const EmployeeDetailModal = ({ employee, onClose }) => {
                 </div>
 
                 {/* Stats Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 28 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 28 }}>
                     {[
                         { label: 'Aprobados', value: employee.stats.approved, color: '#34d399', bg: 'rgba(52,211,153,0.12)', icon: '✅' },
-                        { label: 'Revertidos', value: employee.stats.reverted, color: '#f87171', bg: 'rgba(248,113,113,0.12)', icon: '↩️' },
                         { label: 'Total', value: employee.stats.totalProcessed, color: '#C8A84B', bg: 'rgba(200,168,75,0.12)', icon: '📊' },
                     ].map(({ label, value, color, bg, icon }) => (
                         <div key={label} style={{
@@ -332,10 +331,6 @@ const AdminEmployeesView = () => {
                                         <div style={{ textAlign: 'center' }}>
                                             <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a' }}>{emp.stats.approved}</div>
                                             <div style={{ fontSize: 11, color: '#94a3b8' }}>Aprobados</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626' }}>{emp.stats.reverted}</div>
-                                            <div style={{ fontSize: 11, color: '#94a3b8' }}>Revertidos</div>
                                         </div>
                                         <div style={{ textAlign: 'center' }}>
                                             <div style={{ fontSize: 22, fontWeight: 800, color: '#C8A84B' }}>{emp.stats.totalProcessed}</div>

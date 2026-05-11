@@ -9,6 +9,7 @@ import { UserEmail } from './userEmail.model.js';
 import { Role, UserRole } from './role.model.js';
 import { Account } from '../account/account.model.js';
 import config from '../../configs/config.js';
+import { uploadBufferToCloudinary } from '../../configs/cloudinary.js';
 import { Op } from 'sequelize';
 import sequelize from '../../configs/db.js';
 import { generateAccountNumber } from '../../helpers/account-generator.js';
@@ -597,8 +598,18 @@ export const uploadProfilePhotoController = async (req, res) => {
 			return res.status(404).json({ msg: 'Perfil de usuario no encontrado' });
 		}
 
-		// Ruta relativa para acceso público
-		const photoUrl = `/uploads/profiles/${req.file.filename}`;
+    const folder = process.env.CLOUDINARY_FOLDER || 'nexusbank/profiles';
+    const publicId = `profile_${userId}_${Date.now()}`;
+    const uploadResult = await uploadBufferToCloudinary(req.file.buffer, {
+      folder,
+      public_id: publicId,
+      resource_type: 'image'
+    });
+    const photoUrl = uploadResult?.secure_url || uploadResult?.url || null;
+
+    if (!photoUrl) {
+      return res.status(500).json({ msg: 'No se pudo obtener la URL de la imagen' });
+    }
 
 		// Actualizar el perfil con la nueva foto
 		await user.UserProfile.update({ ProfilePhotoUrl: photoUrl });

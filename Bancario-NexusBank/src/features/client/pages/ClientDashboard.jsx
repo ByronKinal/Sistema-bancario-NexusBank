@@ -4,6 +4,17 @@ import { useClientStore } from '../store/useClientStore.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showError } from '../../../shared/utils/toast.js';
 
+const getAccountTypeLabel = (account) => {
+  const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
+
+  if (!rawType) return 'Cuenta';
+  if (rawType.includes('corrient') || rawType.includes('monetar')) return 'Cuenta corriente';
+  if (rawType.includes('ahor')) return 'Cuenta de ahorro';
+  if (rawType.startsWith('cuenta')) return rawType.charAt(0).toUpperCase() + rawType.slice(1);
+
+  return `Cuenta ${rawType}`;
+};
+
 export const ClientDashboard = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -15,12 +26,36 @@ export const ClientDashboard = () => {
     loading,
     error,
     fetchDashboardData,
+    refreshDashboardData,
     clearError,
   } = useClientStore();
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const refreshData = () => {
+      refreshDashboardData();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+
+    window.addEventListener('focus', refreshData);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const intervalId = window.setInterval(refreshData, 20000);
+
+    return () => {
+      window.removeEventListener('focus', refreshData);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [refreshDashboardData]);
 
   useEffect(() => {
     if (error) {
@@ -156,18 +191,19 @@ export const ClientDashboard = () => {
           <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">¿Qué deseas hacer hoy?</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
             {[
+              { label: 'Mis cuentas', icon: '👤', color: 'from-blue-400 to-blue-600' },
+              { label: 'Depositar', icon: '💰', color: 'from-indigo-400 to-indigo-600' },
               { label: 'Transferir', icon: '💸', color: 'from-blue-400 to-blue-600' },
-              { label: 'Pagar Servicio', icon: '🧾', color: 'from-indigo-400 to-indigo-600' },
-              { label: 'Invertir', icon: '📈', color: 'from-teal-400 to-teal-600' },
-              { label: 'Tarjetas', icon: '💳', color: 'from-purple-400 to-purple-600' },
-            ].map((action, idx) => (
+              { label: 'Favoritos', icon: '⭐', color: 'from-teal-400 to-teal-600' },
+            ].map((action) => (
               <button
-                key={idx}
+                key={action.label}
                 type="button"
                 onClick={() => {
-                  if (action.label === 'Transferir') {
-                    navigate('/clientdashboard/transfers');
-                  }
+                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/');
+                  if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
+                  if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
+                  if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
                 }}
                 className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
               >
@@ -181,7 +217,7 @@ export const ClientDashboard = () => {
 
         {/* Cuentas Secundarias */}
         <div className="lg:col-span-1">
-          <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">Mis Productos</h3>
+          <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">Mi Cuenta</h3>
           <div className="space-y-4">
             {displayAccounts.map((account, idx) => (
               <div
@@ -190,7 +226,7 @@ export const ClientDashboard = () => {
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="font-bold text-[#1A2E52]">{account.name || 'Cuenta de Ahorro'}</p>
+                    <p className="font-bold text-[#1A2E52]">{getAccountTypeLabel(account)}</p>
                     <p className="text-gray-500 text-sm font-mono mt-1">{account.accountNumber || '**** **** 1234'}</p>
                   </div>
                   <p className="text-[#2D5899] font-bold text-xl">

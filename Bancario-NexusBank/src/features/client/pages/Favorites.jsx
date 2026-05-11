@@ -181,8 +181,6 @@ const Favorites = () => {
               >
                 <option value="ahorro">ahorro</option>
                 <option value="corriente">corriente</option>
-                <option value="savings">savings</option>
-                <option value="checking">checking</option>
               </select>
             </div>
 

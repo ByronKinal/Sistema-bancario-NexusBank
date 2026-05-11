@@ -180,11 +180,6 @@
   padding: 12px 16px;
 }
 
-.movements-table td:nth-child(4) {
-  text-align: right;
-  font-weight: 600;
-}
-
 .movements-table td:nth-child(5) {
   text-align: center;
 }

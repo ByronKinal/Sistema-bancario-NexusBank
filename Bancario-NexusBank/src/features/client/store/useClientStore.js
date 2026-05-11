@@ -101,6 +101,29 @@ export const useClientStore = create((set) => ({
   },
 
   // =====================
+  // ACCIONES - REFRESCAR DASHBOARD SIN BLOQUEAR UI
+  // =====================
+  refreshDashboardData: async () => {
+    try {
+      const data = await clientAccountService.getDashboardData();
+
+      set({
+        mainAccount: data.account,
+        userProfile: data.profile,
+        transactions: data.transactions,
+        accounts: data.accounts || [],
+        error: null,
+      });
+
+      return { success: true, data };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Error al refrescar dashboard';
+      set({ error: message });
+      return { success: false, error: message };
+    }
+  },
+
+  // =====================
   // ACCIONES - LIMPIAR ESTADO
   // =====================
   clearError: () => set({ error: null }),

@@ -295,8 +295,6 @@ export default function RegisterForm() {
                 >
                   <option value="Ahorros">Cuenta de Ahorros</option>
                   <option value="Corriente">Cuenta Corriente</option>
-                  <option value="Inversión">Cuenta de Inversión</option>
-                  <option value="Premium">Cuenta Premium</option>
                 </select>
                 {errors.tipoCuenta && <span className="form-error">{errors.tipoCuenta.message}</span>}
               </div>
