@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../features/auth/store/authStore.js';
 import Logo from '../../../assets/img/Logo.jpg';
+import AdminNotifications from './AdminNotifications.jsx';
 import '../../../styles/AdminNavbar.css';
 
 const buildAvatarSrc = (url) => {
@@ -158,6 +159,8 @@ const AdminNavbar = () => {
 				<div style={logoStyle}>
 					<img src={Logo} alt="NexusBank Logo" style={logoImg} />
 				</div>
+
+				<AdminNotifications />
 
 				{/* User Menu */}
 				<div

@@ -69,6 +69,36 @@ export const adminDashboardService = {
     }
   },
 
+  getPendingAccountRequests: async () => {
+    try {
+      const response = await adminRequest('get', '/admin/account-requests');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching pending account requests:', error);
+      throw error;
+    }
+  },
+
+  approveAccountRequest: async (id) => {
+    try {
+      const response = await adminRequest('post', `/admin/account-requests/${id}/approve`);
+      return response.data;
+    } catch (error) {
+      console.error('Error approving account request:', error);
+      throw error;
+    }
+  },
+
+  rejectAccountRequest: async (id) => {
+    try {
+      const response = await adminRequest('post', `/admin/account-requests/${id}/reject`);
+      return response.data;
+    } catch (error) {
+      console.error('Error rejecting account request:', error);
+      throw error;
+    }
+  },
+
   getDepositRequests: async () => {
     try {
       const response = await adminRequest('get', '/accounts/deposit-requests');

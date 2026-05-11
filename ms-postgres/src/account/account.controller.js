@@ -1,4 +1,5 @@
 import { Account } from './account.model.js';
+import { AccountRequest } from './accountRequest.model.js';
 import { generateAccountNumber } from '../../helpers/account-generator.js';
 import { getExchangeRate } from '../../helpers/fx-service.js';
 import sequelize from '../../configs/db.js';
@@ -334,6 +335,89 @@ export const requestAccountWithoutToken = async (req, res) => {
                 status: account.status,
                 accountStatus: account.accountStatus,
                 userId: account.userId
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
+    }
+};
+
+export const requestAccountWithToken = async (req, res) => {
+    try {
+        const { accountType } = req.body;
+        const requesterId = req.user?.id;
+        const note = req.body?.note || '';
+        
+        if (!requesterId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (!accountType) {
+            return res.status(400).json({ success: false, message: 'accountType es requerido' });
+        }
+
+        const targetUser = await User.findByPk(requesterId, { attributes: ['id', 'email', 'status'] });
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+
+        if (!targetUser.status) {
+            return res.status(400).json({ success: false, message: 'El usuario se encuentra inactivo' });
+        }
+
+        const userIsClient = await isClientUser(requesterId);
+        if (!userIsClient) {
+            return res.status(403).json({ success: false, message: 'Solo clientes pueden solicitar cuentas' });
+        }
+
+        // Verificar si hay solicitud PENDING del mismo tipo
+        const pendingRequest = await AccountRequest.findOne({
+            where: {
+                userId: requesterId,
+                accountType: accountType,
+                status: 'PENDING'
+            }
+        });
+
+        if (pendingRequest) {
+            return res.status(409).json({
+                success: false,
+                message: 'Ya tienes una solicitud pendiente para este tipo de cuenta',
+                data: {
+                    requestId: pendingRequest.id,
+                    createdAt: pendingRequest.createdAt
+                }
+            });
+        }
+
+        // Crear solicitud (NO crear la cuenta aún)
+        const accountRequest = await AccountRequest.create({
+            userId: requesterId,
+            accountType: accountType,
+            note: note,
+            status: 'PENDING'
+        });
+
+        const accountOwner = await getUserEmailAndName(requesterId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendSecurityChangeEmail(accountOwner.email, accountOwner.name, {
+                changeType: 'Solicitud de apertura de cuenta recibida',
+                changes: {
+                    accountType: accountType,
+                    status: 'En revisión'
+                },
+                reason: 'Tu solicitud ha sido recibida. El administrador la revisará pronto y te notificaremos.'
+            }));
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: 'Solicitud de cuenta registrada exitosamente. Aguarda la aprobación del administrador.',
+            data: {
+                id: accountRequest.id,
+                accountType: accountRequest.accountType,
+                status: accountRequest.status,
+                createdAt: accountRequest.createdAt
             }
         });
     } catch (error) {
@@ -1318,5 +1402,152 @@ export const getAccountBlockHistory = async (req, res) => {
             message: 'Error en el servidor',
             error: error.message
         });
+    }
+};
+
+export const approveAccountRequest = async (req, res) => {
+    try {
+        const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
+        const { id: requestId } = req.params;
+        const { reason } = req.body || {};
+
+        if (!actorUserId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (actorRole !== 'Admin') {
+            return res.status(403).json({ success: false, message: 'Acceso denegado. Se requiere rol de Admin' });
+        }
+
+        const accountRequest = await AccountRequest.findByPk(requestId);
+        if (!accountRequest) {
+            return res.status(404).json({ success: false, message: 'Solicitud de cuenta no encontrada' });
+        }
+
+        if (accountRequest.status !== 'PENDING') {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden aprobar solicitudes pendientes',
+                currentStatus: accountRequest.status
+            });
+        }
+
+        const targetUser = await User.findByPk(accountRequest.userId, { attributes: ['id', 'email', 'status'] });
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: 'Usuario solicitante no encontrado' });
+        }
+
+        // Crear la cuenta real
+        const accountNumber = await generateAccountNumber(accountRequest.accountType);
+        const newAccount = await Account.create({
+            accountNumber,
+            userId: accountRequest.userId,
+            accountType: accountRequest.accountType,
+            status: true,
+            accountStatus: 'ACTIVE',
+            accountBalance: 0,
+            openedAt: new Date(),
+            lastAdminChangeBy: actorUserId,
+            lastAdminChangeAt: new Date(),
+            lastAdminChangeType: 'REQUEST_APPROVED',
+            lastAdminChangeReason: reason || 'Solicitud aprobada por administrador'
+        });
+
+        // Marcar solicitud como aprobada
+        await accountRequest.update({
+            status: 'APPROVED',
+            createdAccountId: newAccount.id,
+            approvedBy: actorUserId,
+            approvedAt: new Date()
+        });
+
+        // Enviar email al usuario
+        const accountOwner = await getUserEmailAndName(accountRequest.userId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendAccountApprovedEmail(
+                accountOwner.email,
+                accountOwner.name,
+                generateEmailVerificationToken(accountRequest.userId)
+            ));
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Solicitud aprobada y cuenta creada exitosamente',
+            data: {
+                requestId: accountRequest.id,
+                createdAccountId: newAccount.id,
+                accountNumber: newAccount.accountNumber,
+                accountType: newAccount.accountType,
+                status: newAccount.accountStatus,
+                approvedBy: actorUserId,
+                approvedAt: accountRequest.approvedAt
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
+    }
+};
+
+export const rejectAccountRequest = async (req, res) => {
+    try {
+        const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
+        const { id: requestId } = req.params;
+        const { reason } = req.body || {};
+
+        if (!actorUserId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (actorRole !== 'Admin') {
+            return res.status(403).json({ success: false, message: 'Acceso denegado. Se requiere rol de Admin' });
+        }
+
+        const accountRequest = await AccountRequest.findByPk(requestId);
+        if (!accountRequest) {
+            return res.status(404).json({ success: false, message: 'Solicitud de cuenta no encontrada' });
+        }
+
+        if (accountRequest.status !== 'PENDING') {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden rechazar solicitudes pendientes',
+                currentStatus: accountRequest.status
+            });
+        }
+
+        await accountRequest.update({
+            status: 'REJECTED',
+            rejectedBy: actorUserId,
+            rejectedAt: new Date(),
+            rejectionReason: reason || 'Solicitud rechazada por administrador'
+        });
+
+        // Enviar email al usuario
+        const accountOwner = await getUserEmailAndName(accountRequest.userId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendAccountRejectedEmail(
+                accountOwner.email,
+                accountOwner.name,
+                reason || 'Tu solicitud de apertura de cuenta fue rechazada.'
+            ));
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Solicitud rechazada exitosamente',
+            data: {
+                requestId: accountRequest.id,
+                accountType: accountRequest.accountType,
+                status: accountRequest.status,
+                rejectedBy: actorUserId,
+                rejectedAt: accountRequest.rejectedAt,
+                rejectionReason: accountRequest.rejectionReason
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
     }
 };

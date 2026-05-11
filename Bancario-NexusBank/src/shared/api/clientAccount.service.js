@@ -106,4 +106,18 @@ export const clientAccountService = {
       throw error;
     }
   },
+  // Enviar solicitud para abrir nueva cuenta (servidor debe manejarla)
+  createAccountRequest: async (payload) => {
+    try {
+      const response = await axiosClientFallback.post('/accounts/requests', payload, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating account request:', error);
+      throw error;
+    }
+  },
 };
