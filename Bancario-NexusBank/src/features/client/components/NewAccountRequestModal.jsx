@@ -3,7 +3,7 @@ import { clientAccountService } from '../../../shared/api/clientAccount.service.
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showSuccess, showError } from '../../../shared/utils/toast.js';
 
-const NewAccountRequestModal = ({ visible, onClose, defaultEmail }) => {
+const NewAccountRequestModal = ({ visible, onClose, defaultUserId }) => {
   const [accountType, setAccountType] = useState('ahorro');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,8 +37,8 @@ const NewAccountRequestModal = ({ visible, onClose, defaultEmail }) => {
         <p className="muted">Se enviará una notificación al administrador para su aprobación.</p>
 
         <div className="modal-row">
-          <label>Correo del solicitante</label>
-          <div className="modal-val">{defaultEmail || tokenUser?.email}</div>
+          <label>ID del solicitante</label>
+          <div className="modal-val">{defaultUserId || tokenUser?.id || tokenUser?.userId || '—'}</div>
         </div>
 
         <div className="modal-row">

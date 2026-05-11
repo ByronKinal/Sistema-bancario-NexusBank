@@ -200,7 +200,7 @@ export const ClientDashboard = () => {
                 key={action.label}
                 type="button"
                 onClick={() => {
-                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/');
+                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/accounts');
                   if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
                   if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
                   if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');

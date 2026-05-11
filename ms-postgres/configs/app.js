@@ -19,6 +19,7 @@ import { sendSuccess } from '../helpers/response.js';
 
 import authRoutes from '../src/auth/auth.routes.js';
 import accountRoutes from '../src/account/account.routes.js';
+import notificationRoutes from '../src/notifications/notification.routes.js';
 import depositRoutes from '../src/deposit/deposit.routes.js';
 import transactionRoutes from '../src/transaction/transaction.routes.js';
 import userRoutes from '../src/user/user.routes.js';
@@ -85,6 +86,7 @@ export const createApp = () => {
 
   app.use(`${BASE_PATH}/auth`, authRoutes);
   app.use(`${BASE_PATH}`, accountRoutes);
+  app.use(`${BASE_PATH}`, notificationRoutes);
   app.use(`${BASE_PATH}`, depositRoutes);
   app.use(`${BASE_PATH}`, transactionRoutes);
   app.put(`${BASE_PATH}/profile/edit`, verifyTokenAndGetUser, validateEditOwnProfile, editOwnProfile);

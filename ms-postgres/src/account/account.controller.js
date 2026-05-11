@@ -484,6 +484,19 @@ export const enableRequestedAccount = async (req, res) => {
                     accountOwner.name,
                     verificationToken
                 ));
+                // Crear notificación para el usuario: cuenta aprobada
+                try {
+                    const Notification = (await import('../notifications/notification.model.js')).default;
+                    await Notification.create({
+                        userId: account.userId,
+                        title: 'Cuenta aprobada',
+                        message: `Tu cuenta ${account.accountNumber} ha sido aprobada y habilitada.`,
+                        url: `/my-account/${account.id}`,
+                        read: false
+                    });
+                } catch (notifErr) {
+                    console.error('Error creando notificación de cuenta aprobada:', notifErr && notifErr.message ? notifErr.message : notifErr);
+                }
             }
         }
 
@@ -1470,6 +1483,19 @@ export const approveAccountRequest = async (req, res) => {
                 accountOwner.name,
                 generateEmailVerificationToken(accountRequest.userId)
             ));
+        }
+
+        try {
+            const Notification = (await import('../notifications/notification.model.js')).default;
+            await Notification.create({
+                userId: accountRequest.userId,
+                title: 'Cuenta creada y aprobada',
+                message: `Tu solicitud fue aprobada. La cuenta ${newAccount.accountNumber} ya fue creada y habilitada.`,
+                url: `/my-account/${newAccount.id}`,
+                read: false
+            });
+        } catch (notifErr) {
+            console.error('Error creando notificación de solicitud aprobada:', notifErr && notifErr.message ? notifErr.message : notifErr);
         }
 
         return res.status(200).json({

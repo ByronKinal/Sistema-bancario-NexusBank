@@ -64,25 +64,14 @@ const AdminNotifications = () => {
     <div ref={wrapperRef} style={{ position: 'relative', marginRight: 12 }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          color: '#fff',
-          cursor: 'pointer',
-          position: 'relative',
-          padding: 8,
-          borderRadius: 8
-        }}
+        className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift"
         title="Solicitudes"
+        style={{ border: 'none', cursor: 'pointer' }}
+        aria-label="Solicitudes"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path>
-          <path d="M13.73 21a2 2 0 01-3.46 0"></path>
-        </svg>
+        <span className="text-xl" aria-hidden="true">🔔</span>
         {badgeCount > 0 && (
-          <span style={{ position: 'absolute', top: 2, right: 2, background: '#e11d48', color: '#fff', borderRadius: 9999, padding: '2px 6px', fontSize: 11, fontWeight: 700 }}>
-            {badgeCount}
-          </span>
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full" />
         )}
       </button>
 

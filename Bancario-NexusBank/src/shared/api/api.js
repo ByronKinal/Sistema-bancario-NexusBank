@@ -12,6 +12,13 @@ export const axiosAuth = axios.create({
   },
 });
 
+// ensure auth requests include Authorization header when token is present
+axiosAuth.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 export const axiosClient = axios.create({
   baseURL,
   timeout: 10000,

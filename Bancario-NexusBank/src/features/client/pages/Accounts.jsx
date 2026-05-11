@@ -101,20 +101,20 @@ const Accounts = () => {
   });
  
   const userName = user?.name || userProfile?.Name || user?.firstName || user?.username || '—';
-  const userEmail = user?.email || userProfile?.Email || '—';
+  const userId = user?.id || userProfile?.id || userProfile?.UserId || userProfile?.userId || '—';
  
   return (
     <div className="accounts-page animate-fade-in-up">
  
-      {/* Header con email protegido */}
+      {/* Header con identificador protegido */}
       <div className="accounts-header">
         <div>
           <h2 className="accounts-title">Mis cuentas</h2>
-          <p className="accounts-sub">Todas las cuentas asociadas a tu correo</p>
+          <p className="accounts-sub">Todas las cuentas asociadas a tu usuario</p>
         </div>
         <div className="email-pill">
           <span className="email-pill-dot"></span>
-          <span className="email-pill-txt">{userEmail} · {accounts.length} cuenta{accounts.length !== 1 ? 's' : ''}</span>
+          <span className="email-pill-txt">ID {userId} · {accounts.length} cuenta{accounts.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
  
@@ -126,7 +126,7 @@ const Accounts = () => {
           </svg>
         </div>
         <span className="protected-txt">
-          Ruta protegida · Solo ves las cuentas vinculadas a <strong>{userEmail}</strong>. Sesión verificada con token.
+          Ruta protegida · Solo ves las cuentas vinculadas a <strong>ID {userId}</strong>. Sesión verificada con token.
         </span>
       </div>
  
@@ -187,7 +187,7 @@ const Accounts = () => {
           <NewAccountRequestModal
             visible={showNewAccountModal}
             onClose={(ok) => { setShowNewAccountModal(false); if (ok) fetchAllAccounts(); }}
-            defaultEmail={user?.email || userProfile?.Email}
+            defaultUserId={user?.id || userProfile?.id || userProfile?.UserId || userProfile?.userId}
           />
         </div>
  
@@ -294,7 +294,7 @@ const Accounts = () => {
                     <div className="detail-sec">Información de la cuenta</div>
                     <div className="info-box">
                       <div className="info-row"><span className="info-key">Titular</span><span className="info-val">{userName}</span></div>
-                      <div className="info-row"><span className="info-key">Correo</span><span className="info-val info-val--email">{userEmail}</span></div>
+                      <div className="info-row"><span className="info-key">ID de usuario</span><span className="info-val info-val--email">{userId}</span></div>
                       <div className="info-row"><span className="info-key">Tipo</span><span className="info-val">{getAccountTypeLabel(selected)}</span></div>
                       <div className="info-row">
                         <span className="info-key">Apertura</span>

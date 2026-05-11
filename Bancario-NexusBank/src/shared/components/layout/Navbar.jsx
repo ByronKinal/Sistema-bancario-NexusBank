@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../features/auth/store/authStore.js';
+import ClientNotifications from './ClientNotifications.jsx';
 
 // Construye la URL de la foto limpia (sin duplicar ?t=)
 const buildPhotoSrc = (url) => {
@@ -39,11 +40,7 @@ export const Navbar = () => {
       </div>
 
       <div className="flex items-center space-x-6 relative">
-        {/* Campana */}
-        <button className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift">
-          <span className="text-xl">🔔</span>
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full"></span>
-        </button>
+        <ClientNotifications />
 
         {/* Usuario */}
         <div
