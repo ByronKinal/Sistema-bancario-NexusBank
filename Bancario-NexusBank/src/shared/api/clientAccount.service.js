@@ -120,4 +120,49 @@ export const clientAccountService = {
       throw error;
     }
   },
+
+  // Obtener historial completo de movimientos con filtros y paginación
+  getAccountHistory: async (filters = {}) => {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        accountId = null,
+        type = null,
+        status = null,
+        startDate = null,
+        endDate = null
+      } = filters;
+
+      const params = new URLSearchParams();
+      params.append('page', page);
+      params.append('limit', limit);
+
+      if (accountId) params.append('accountId', accountId);
+      if (type) params.append('type', type);
+      if (status) params.append('status', status);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+
+      const response = await getFromBankingApi(`/my-account/history?${params.toString()}`);
+      return response.data?.data || { transactions: [], pagination: {}, summary: {} };
+    } catch (error) {
+      console.error('Error fetching account history:', error);
+      throw error;
+    }
+  },
+
+  // Obtener detalles de un movimiento específico
+  getTransactionDetail: async (transactionId) => {
+    try {
+      const response = await getFromBankingApi(`/accounts/transfers/${transactionId}`);
+      return response.data?.data || null;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      console.error('Error fetching transaction detail:', error);
+      throw error;
+    }
+  }
 };

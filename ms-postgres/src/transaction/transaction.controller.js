@@ -18,6 +18,7 @@ import {
     AUDIT_RESOURCES,
     recordAuditEvent
 } from '../../services/audit.service.js';
+import transactionService from './transaction.service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
@@ -916,111 +917,60 @@ export const getMyAccountHistory = async (req, res) => {
 
         if (!currentUserId) {
             return res.status(401).json({ 
-                success: false, 
-                message: 'Usuario no autenticado' 
-            });
-        }
-
-        const accounts = await Account.findAll({
-            where: { userId: currentUserId },
-            attributes: ['id', 'accountNumber', 'accountBalance', 'accountType', 'status', 'createdAt'],
-            order: [['createdAt', 'DESC']]
-        });
-
-        if (!accounts || accounts.length === 0) {
-            return res.status(404).json({
                 success: false,
-                message: 'No se encontraron cuentas para este usuario'
+                code: 'UNAUTHORIZED',
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
             });
         }
 
-        const accountIds = accounts.map(acc => acc.id);
+        // Extraer parámetros de query
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 10;
+        const accountId = req.query.accountId || null;
+        const type = req.query.type || null;
+        const status = req.query.status || null;
+        const startDate = req.query.startDate || null;
+        const endDate = req.query.endDate || null;
 
-        const transactions = await Transaction.findAll({
-            where: {
-                accountId: {
-                    [Op.in]: accountIds
-                }
-            },
-            attributes: [
-                'id',
-                'accountId',
-                'type',
-                'amount',
-                'description',
-                'balanceAfter',
-                'relatedAccountId',
-                'status',
-                'isReverted',
-                'revertedAt',
-                'appliedCouponId',
-                'createdAt',
-                'updatedAt'
-            ],
-            order: [['createdAt', 'DESC']]
+        // Llamar al servicio
+        const result = await transactionService.getAccountHistory(currentUserId, {
+            page,
+            limit,
+            accountId,
+            type,
+            status,
+            startDate,
+            endDate,
+            includeRelatedAccounts: true
         });
-
-        const accountsData = accounts.map(acc => ({
-            accountId: acc.id,
-            accountNumber: acc.accountNumber,
-            accountType: acc.accountType,
-            currentBalance: acc.accountBalance,
-            status: acc.status,
-            createdAt: acc.createdAt
-        }));
-
-        const transactionsData = transactions.map(trx => {
-            const transactionInfo = {
-                transactionId: trx.id,
-                accountId: trx.accountId,
-                type: trx.type,
-                amount: trx.amount,
-                description: trx.description,
-                balanceAfter: trx.balanceAfter,
-                status: trx.status,
-                date: trx.createdAt,
-                updatedAt: trx.updatedAt
-            };
-
-            if (trx.relatedAccountId) {
-                transactionInfo.relatedAccountId = trx.relatedAccountId;
-            }
-            if (trx.isReverted) {
-                transactionInfo.isReverted = true;
-                transactionInfo.revertedAt = trx.revertedAt;
-            }
-            if (trx.appliedCouponId) {
-                transactionInfo.appliedCouponId = trx.appliedCouponId;
-            }
-
-            return transactionInfo;
-        });
-
-        const totalBalance = accounts.reduce((sum, acc) => {
-            return sum + getNumericAmount(acc.accountBalance);
-        }, 0);
 
         return res.status(200).json({
             success: true,
+            code: null,
             message: 'Historial de cuenta obtenido exitosamente',
-            data: {
-                accounts: accountsData,
-                totalBalance: totalBalance.toFixed(2),
-                transactions: transactionsData,
-                summary: {
-                    totalAccounts: accounts.length,
-                    totalTransactions: transactions.length,
-                    activeAccounts: accounts.filter(acc => acc.status).length
-                }
-            }
+            data: result,
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
         console.error('Error obteniendo historial de cuenta:', error);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Error en el servidor', 
-            error: error.message 
+        
+        if (error.message === 'Account does not belong to user') {
+            return res.status(403).json({
+                success: false,
+                code: 'FORBIDDEN',
+                message: 'No tienes acceso a esta cuenta',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            code: 'INTERNAL_ERROR',
+            message: 'Error en el servidor',
+            details: error.message,
+            timestamp: new Date().toISOString()
         });
     }
 };

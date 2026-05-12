@@ -16,6 +16,7 @@ import { Deposits } from '../../features/client/pages/Deposits.jsx';
 import { Transfers } from '../../features/client/pages/Transfers.jsx';
 import Favorites from '../../features/client/pages/Favorites.jsx';
 import Accounts from '../../features/client/pages/Accounts.jsx';
+import AccountHistory from '../../features/client/pages/AccountHistory.jsx';
 import PendingRequestsView from '../../shared/components/layout/PendingRequestsView.jsx';
 import EmployeDashnoardContainer from '../../shared/components/layout/EmployeDashnoardContainer.jsx';
 import EmployeeProfileSettingsView from '../../shared/components/layout/EmployeeProfileSettingsView.jsx';
@@ -42,6 +43,7 @@ export const AppRoutes = () => {
             >
                 <Route index element={<ClientDashboard />} />
                 <Route path="accounts" element={<Accounts />} />
+                <Route path="account-history" element={<AccountHistory />} />
                 <Route path="profile-settings" element={<ClientProfileSettingsView />} />
                 <Route path="deposits" element={<Deposits />} />
                 <Route path="transfers" element={<Transfers />} />
