@@ -21,6 +21,7 @@ import PendingRequestsView from '../../shared/components/layout/PendingRequestsV
 import EmployeDashnoardContainer from '../../shared/components/layout/EmployeDashnoardContainer.jsx';
 import EmployeeProfileSettingsView from '../../shared/components/layout/EmployeeProfileSettingsView.jsx';
 import AdminEmployeesView from '../../shared/components/layout/AdminEmployeesView.jsx';
+import PromotionsManagementView from '../../shared/components/layout/PromotionsManagementView.jsx';
 
 export const AppRoutes = () => {
     return (
@@ -81,6 +82,14 @@ export const AppRoutes = () => {
                 element={
                     <ProtectedRoute requiredRole="Admin">
                         <PendingRequestsView />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/AdminDashboard/promotions"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <PromotionsManagementView />
                     </ProtectedRoute>
                 }
             />

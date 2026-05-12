@@ -37,7 +37,12 @@ const AdminSidebar = () => {
         <div style={{marginTop:16}}>
           <div style={sectionTitle}>OPERACIONES</div>
           <div style={{...item}}>Transacciones</div>
-          <div style={{...item}}>Promociones</div>
+          <div 
+            style={{...item, background: location.pathname === '/AdminDashboard/promotions' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/promotions' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/promotions' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/promotions')}
+          >
+            Promociones
+          </div>
         </div>
 
         <div style={{marginTop:16}}>
