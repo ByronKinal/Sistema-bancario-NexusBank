@@ -25,6 +25,7 @@ export const Deposits = () => {
   const [useManualDestination, setUseManualDestination] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [pendingRequests, setPendingRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [requestLoading, setRequestLoading] = useState(false);
@@ -112,7 +113,8 @@ export const Deposits = () => {
       const payload = {
         destinationAccountNumber: selectedAccountNumber,
         amount,
-        description: description || 'Solicitud de depósito cliente'
+        description: description || 'Solicitud de depósito cliente',
+        couponCode: couponCode || undefined
       };
 
       const response = await clientDepositService.createDepositRequest(payload);
@@ -137,6 +139,7 @@ export const Deposits = () => {
       showSuccess('Solicitud de depósito enviada correctamente. Queda pendiente de aprobación.');
       setAmount('');
       setDescription('');
+      setCouponCode('');
     } catch (submitError) {
       const message = submitError.response?.data?.message || 'Error al enviar la solicitud de depósito';
       showError(message);
@@ -362,22 +365,50 @@ export const Deposits = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción (opcional)</label>
-              <textarea
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:border-[#2D5899] focus:outline-none min-h-[120px]"
-                placeholder="Agrega una descripción del depósito opcional"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
+              {/* Optional Description */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-[#1A2E52]">Descripción (Opcional)</label>
+                <div className="relative group">
+                  <div className="absolute top-3 left-4 text-gray-400 group-focus-within:text-[#2D5899] transition-colors">
+                    📝
+                  </div>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Ej. Pago de servicios..."
+                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200/50 rounded-2xl focus:ring-4 focus:ring-[#2D5899]/10 focus:border-[#2D5899] transition-all resize-none h-24"
+                  />
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              disabled={requestLoading}
-              className="w-full rounded-2xl bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white font-semibold py-3 hover:shadow-lg transition disabled:opacity-60"
-            >
-              {requestLoading ? 'Enviando...' : 'Enviar Depósito'}
-            </button>
+              {/* Promo Code */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-[#1A2E52]">Código de Promoción (Opcional)</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#2D5899] transition-colors">
+                    🎟️
+                  </div>
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    placeholder="ID de promoción si aplica..."
+                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200/50 rounded-2xl focus:ring-4 focus:ring-[#2D5899]/10 focus:border-[#2D5899] transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={requestLoading}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white font-semibold py-3 hover:shadow-lg transition disabled:opacity-60"
+                >
+                  {requestLoading ? 'Enviando...' : 'Enviar Depósito'}
+                </button>
+              </div>
+            </div>
           </form>
         </section>
 

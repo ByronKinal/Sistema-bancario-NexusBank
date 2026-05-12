@@ -132,13 +132,6 @@ const PendingRequestsView = () => {
               <div className="movements-header">
                 <h3 className="movements-title">Lista de solicitudes</h3>
                 <div className="filters-container">
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Buscar por ID o Nombre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
                   <select
                     className="filter-select"
                     value={filterStatus}

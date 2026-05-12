@@ -13,6 +13,7 @@ import {
     AUDIT_RESOURCES,
     recordAuditEvent
 } from '../../services/audit.service.js';
+import axios from 'axios';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
@@ -155,7 +156,7 @@ export const createDepositRequest = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
         }
 
-        const { destinationAccountNumber, amount, description } = req.body;
+        const { destinationAccountNumber, amount, description, couponCode } = req.body;
 
         if (!destinationAccountNumber || !amount) {
             return res.status(400).json({
@@ -222,7 +223,8 @@ export const createDepositRequest = async (req, res) => {
             description: description || 'Solicitud de deposito por formulario de cliente',
             balanceAfter: Number(destinationAccount.accountBalance || 0).toFixed(2),
             status: 'PENDIENTE',
-            relatedAccountId: currentUserId
+            relatedAccountId: currentUserId,
+            appliedCouponId: couponCode || null
         });
 
         return res.status(201).json({
@@ -390,12 +392,44 @@ export const approveDepositRequest = async (req, res) => {
             });
         }
 
-        const resultingBalance = accountBalance + requestAmount;
+        let cashbackAmount = 0;
+        let couponApplied = false;
+        let couponInfo = null;
+
+        if (depositRequest.appliedCouponId) {
+            try {
+                // Call ms-mongo to validate and apply the coupon
+                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+                
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId: depositRequest.appliedCouponId,
+                    operationType: 'DEPOSITO',
+                    amount: requestAmount
+                });
+
+                if (response.data && response.data.valid) {
+                    couponApplied = true;
+                    couponInfo = response.data.benefit;
+                    if (couponInfo && couponInfo.type === 'CASHBACK') {
+                        cashbackAmount = couponInfo.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating coupon with ms-mongo:', err.message);
+                // Si falla la validación del cupón, igual pasamos el depósito sin cashback, pero lo ideal
+                // sería informarlo. Por ahora, si falla Mongo, no aplicamos cashback.
+            }
+        }
+
+        const resultingBalance = accountBalance + requestAmount + cashbackAmount;
         const finalBalance = resultingBalance;
         destinationAccount.accountBalance = finalBalance.toFixed(2);
         await destinationAccount.save({ transaction: dbTransaction });
 
         let depositDescription = depositRequest.description || 'Depósito aprobado';
+        if (couponApplied && cashbackAmount > 0) {
+            depositDescription += ` | Incluye Cashback: Q${cashbackAmount.toFixed(2)}`;
+        }
         depositDescription += ` | Aprobada por ${approverUserId}`;
 
         depositRequest.status = 'COMPLETADA';
@@ -418,6 +452,7 @@ export const approveDepositRequest = async (req, res) => {
             transactionId: depositRequest.id,
             accountId: destinationAccount.id,
             depositAmount: requestAmount.toFixed(2),
+            cashbackAmount: cashbackAmount > 0 ? cashbackAmount.toFixed(2) : undefined,
             newBalance: destinationAccount.accountBalance
         };
 
@@ -439,8 +474,8 @@ export const approveDepositRequest = async (req, res) => {
                 depositId: depositRequest.id,
                 accountId: destinationAccount.id,
                 amount: requestAmount.toFixed(2),
-                couponId: null,
-                cashbackAmount: '0.00'
+                couponId: couponApplied ? depositRequest.appliedCouponId : null,
+                cashbackAmount: cashbackAmount.toFixed(2)
             }
         });
 
@@ -769,5 +804,5 @@ export const revertDeposit = async (req, res) => {
     }
 };
 
- 
+
 

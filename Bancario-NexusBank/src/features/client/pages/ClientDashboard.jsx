@@ -246,7 +246,10 @@ export const ClientDashboard = () => {
       <div>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-[#1A2E52]">Movimientos Recientes</h3>
-          <button className="text-[#2D5899] hover:text-[#1A2E52] font-semibold transition-colors flex items-center">
+          <button 
+            onClick={() => navigate('/clientdashboard/account-history')}
+            className="text-[#2D5899] hover:text-[#1A2E52] font-semibold transition-colors flex items-center"
+          >
             Ver historial completo <span className="ml-1">→</span>
           </button>
         </div>

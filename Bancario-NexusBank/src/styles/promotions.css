@@ -50,6 +50,12 @@
   color: #94a3b8;
 }
 
+/* ──── Select Options Modal ──── */
+.custom-select-options option {
+  background: #1A2E52; /* Color de fondo oscuro para contrastar */
+  color: #ffffff;      /* Texto blanco */
+}
+
 /* ──── Tabla de Promociones ──── */
 .movements-table-wrapper {
   overflow-x: auto;

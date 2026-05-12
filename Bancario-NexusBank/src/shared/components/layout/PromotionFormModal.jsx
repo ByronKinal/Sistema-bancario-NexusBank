@@ -346,6 +346,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                 name="promotionType"
                 value={formData.promotionType}
                 onChange={handleInputChange}
+                className="custom-select-options"
                 style={{
                   width: '100%',
                   padding: '10px 12px',

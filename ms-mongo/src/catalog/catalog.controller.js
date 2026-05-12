@@ -125,8 +125,10 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
         }
 
         let cashbackAmount = 0;
-        if (promotion.cashbackPercentage) {
-          cashbackAmount = (amount * promotion.cashbackPercentage) / 100;
+        const actualCashbackPercentage = promotion.cashbackPercentage || promotion.discountPercentage;
+        
+        if (actualCashbackPercentage) {
+          cashbackAmount = (amount * actualCashbackPercentage) / 100;
         } else if (promotion.cashbackAmount) {
           cashbackAmount = promotion.cashbackAmount;
         }
@@ -232,24 +234,34 @@ export const incrementPromotionUsage = async (couponId, dbTransaction = null) =>
 
 export const getAllPromotions = async (req, res) => {
   try {
+    const { search } = req.query;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const promotions = await Catalog.find({
+    let query = {
       status: 'ACTIVA',
+      isExclusive: false,
       $or: [
         { endDate: { $gte: today } },
         { endDate: null }
       ]
-    })
-    .select('_id name description promotionType minDepositAmount maxDepositAmount minTransferAmount maxTransferAmount discountPercentage cashbackPercentage cashbackAmount startDate endDate isExclusive createdAt')
-    .sort({ createdAt: -1 });
+    };
+
+    if (search) {
+      query.$text = { $search: search };
+    }
+
+    const promotions = await Catalog.find(query)
+      .select('_id name description promotionType minDepositAmount maxDepositAmount minTransferAmount maxTransferAmount discountPercentage cashbackPercentage cashbackAmount startDate endDate isExclusive usesCountTotal maxUsesTotalPromotion createdAt')
+      .sort(search ? { score: { $meta: 'textScore' } } : { createdAt: -1 });
+
+    const validPromotions = promotions.filter(promo => isPromotionValid(promo));
 
     return res.status(200).json({
       success: true,
       message: 'Promociones disponibles',
-      count: promotions.length,
-      data: promotions
+      count: validPromotions.length,
+      data: validPromotions
     });
   } catch (error) {
     return res.status(500).json({
