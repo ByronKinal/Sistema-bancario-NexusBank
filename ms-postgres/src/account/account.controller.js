@@ -1475,16 +1475,6 @@ export const approveAccountRequest = async (req, res) => {
             approvedAt: new Date()
         });
 
-        // Enviar email al usuario
-        const accountOwner = await getUserEmailAndName(accountRequest.userId);
-        if (accountOwner) {
-            await sendEmailSafe(() => sendAccountApprovedEmail(
-                accountOwner.email,
-                accountOwner.name,
-                generateEmailVerificationToken(accountRequest.userId)
-            ));
-        }
-
         try {
             const Notification = (await import('../notifications/notification.model.js')).default;
             await Notification.create({

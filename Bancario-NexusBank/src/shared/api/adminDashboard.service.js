@@ -79,6 +79,16 @@ export const adminDashboardService = {
     }
   },
 
+  getAllAccountRequests: async () => {
+    try {
+      const response = await adminRequest('get', '/admin/account-requests/all');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching all account requests:', error);
+      throw error;
+    }
+  },
+
   approveAccountRequest: async (id) => {
     try {
       const response = await adminRequest('post', `/admin/account-requests/${id}/approve`);

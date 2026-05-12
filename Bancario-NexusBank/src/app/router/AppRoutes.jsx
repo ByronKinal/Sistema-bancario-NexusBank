@@ -22,6 +22,8 @@ import EmployeDashnoardContainer from '../../shared/components/layout/EmployeDas
 import EmployeeProfileSettingsView from '../../shared/components/layout/EmployeeProfileSettingsView.jsx';
 import AdminEmployeesView from '../../shared/components/layout/AdminEmployeesView.jsx';
 import PromotionsManagementView from '../../shared/components/layout/PromotionsManagementView.jsx';
+import AccountRequestsHistoryView from '../../shared/components/layout/AccountRequestsHistoryView.jsx';
+import ClientNotificationsView from '../../shared/components/layout/ClientNotificationsView.jsx';
 
 export const AppRoutes = () => {
     return (
@@ -45,6 +47,7 @@ export const AppRoutes = () => {
                 <Route index element={<ClientDashboard />} />
                 <Route path="accounts" element={<Accounts />} />
                 <Route path="account-history" element={<AccountHistory />} />
+                <Route path="notifications" element={<ClientNotificationsView />} />
                 <Route path="profile-settings" element={<ClientProfileSettingsView />} />
                 <Route path="deposits" element={<Deposits />} />
                 <Route path="transfers" element={<Transfers />} />
@@ -90,6 +93,14 @@ export const AppRoutes = () => {
                 element={
                     <ProtectedRoute requiredRole="Admin">
                         <PromotionsManagementView />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/AdminDashboard/account-requests-history"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <AccountRequestsHistoryView />
                     </ProtectedRoute>
                 }
             />
