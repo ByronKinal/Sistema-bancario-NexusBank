@@ -25,12 +25,7 @@ const AdminSidebar = () => {
           >
             Dashboard
           </div>
-          <div 
-            style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/users' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/users' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/users' ? 700 : 400}}
-            onClick={() => navigate('/AdminDashboard/users')}
-          >
-            Usuarios
-          </div>
+          <div style={{...item, marginTop:6}}>Usuarios <span style={{marginLeft:6, background:'#ff4757', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#fff'}}>142</span></div>
           <div 
             style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/employees' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/employees' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/employees' ? 700 : 400}}
             onClick={() => navigate('/AdminDashboard/employees')}
