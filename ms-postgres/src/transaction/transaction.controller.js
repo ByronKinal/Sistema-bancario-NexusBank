@@ -20,6 +20,7 @@ import {
     recordAuditEvent
 } from '../../services/audit.service.js';
 import transactionService from './transaction.service.js';
+import notificationService from '../../services/notification.service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
@@ -215,6 +216,19 @@ export const createTransfer = async (req, res) => {
                     attemptedAmount: numericAmount,
                     maxAllowed: MAX_TRANSFER_AMOUNT
                 }
+            });
+
+            // Notificación de seguridad por monto excedido
+            await notificationService.sendFraudAlert(currentUserId, {
+              title: 'Actividad Sospechosa: Transferencia de Gran Monto',
+              message: `Se intentó realizar una transferencia por Q${numericAmount}, lo cual excede el límite de seguridad de Q${MAX_TRANSFER_AMOUNT}.`,
+              emailType: 'FRAUD',
+              emailData: {
+                alertType: 'UNUSUAL_AMOUNT',
+                severity: 'MEDIUM',
+                description: `Intento de transferencia inusual por Q${numericAmount}.`,
+                detectedAt: new Date()
+              }
             });
             
             await notifyTransferRejected(

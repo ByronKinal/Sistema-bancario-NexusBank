@@ -26,6 +26,11 @@ import {
   sendVerificationFlowEmail,
   sendPasswordResetFlowEmail
 } from '../../services/auth/auth-mail-flow.service.js';
+import { 
+  sendAccountBlockedEmail,
+  sendFraudAlertEmail
+} from '../../services/email.service.js';
+import notificationService from '../../services/notification.service.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_RESOURCES,
@@ -89,14 +94,26 @@ export const login = async (req, res) => {
 
     if (typeof identifier === 'string' && identifier.includes('@')) {
       // it's an email
-      user = await User.findOne({ where: { email: identifier } });
+      user = await User.findOne({ 
+        where: { email: identifier },
+        include: [{ model: UserProfile, as: 'UserProfile' }]
+      });
     } else {
       // treat as username -> find profile then user (case-insensitive)
       const profile = await UserProfile.findOne({
         where: { Username: { [Op.iLike]: identifier } }
       });
-      if (profile) user = await User.findByPk(profile.UserId);
+      if (profile) {
+        user = await User.findByPk(profile.UserId, {
+          include: [{ model: UserProfile, as: 'UserProfile' }]
+        });
+      }
     }
+    
+    if (user) {
+      console.log(`[AUTH] Usuario encontrado: ${user.id}, intentos previos: ${user.failedLoginAttempts}`);
+    }
+
     if (!user) {
       await recordAuditEvent({
         req,
@@ -135,8 +152,63 @@ export const login = async (req, res) => {
       });
     }
 
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      return sendError(res, {
+        status: 423,
+        code: 'AUTH_ACCOUNT_LOCKED',
+        message: 'Demasiados intentos fallidos. Intenta nuevamente en 1 minuto.'
+      });
+    }
+
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      // Incrementar intentos fallidos
+      const currentAttempts = (user.failedLoginAttempts || 0) + 1;
+      const remainingAttempts = 3 - currentAttempts;
+      
+      let message = `Contraseña incorrecta. Te queda${remainingAttempts === 1 ? '' : 'n'} ${remainingAttempts} intento${remainingAttempts === 1 ? '' : 's'}.`;
+      let lockUntil = null;
+
+      if (currentAttempts === 2) {
+        // Alerta preventiva por múltiples intentos (2)
+        console.log(`[AUTH] Enviando alerta por 2 intentos fallidos para usuario: ${user.id}`);
+        await notificationService.sendFraudAlert(user.id, {
+          title: 'Aviso de Seguridad: Intentos de Acceso',
+          message: 'Se han detectado 2 intentos fallidos de inicio de sesión en tu cuenta. Si no fuiste tú, por favor protege tu cuenta.',
+          emailType: 'FRAUD',
+          emailData: {
+            alertType: 'FAILED_LOGIN_ATTEMPTS',
+            severity: 'LOW',
+            description: 'Dos intentos fallidos consecutivos de inicio de sesión.',
+            detectedAt: new Date()
+          }
+        });
+      }
+
+      if (currentAttempts >= 3) {
+        lockUntil = new Date(Date.now() + 60 * 1000); // Bloqueo por 1 minuto
+        message = 'Demasiados intentos fallidos. Intenta nuevamente en 1 minuto.';
+        
+        console.log(`[AUTH] Bloqueando usuario ${user.id} por 1 minuto`);
+        // Notificación centralizada (App + Email)
+        await notificationService.sendFraudAlert(user.id, {
+          title: 'Cuenta Bloqueada Temporalmente',
+          message: 'Tu cuenta ha sido bloqueada tras 3 intentos fallidos de inicio de sesión.',
+          emailType: 'BLOCK',
+          emailData: {
+            blockedUntil: lockUntil,
+            failedAttempts: 3,
+            reason: 'Múltiples intentos fallidos de inicio de sesión'
+          }
+        });
+      }
+      
+      // Actualizar instancia y guardar
+      user.failedLoginAttempts = currentAttempts >= 3 ? 0 : currentAttempts;
+      user.lockUntil = lockUntil;
+      await user.save();
+      console.log(`[AUTH] Usuario ${user.id} actualizado: intentos=${user.failedLoginAttempts}, bloqueadoHasta=${user.lockUntil}`);
+
       await recordAuditEvent({
         req,
         actorUserId: user.id,
@@ -144,15 +216,22 @@ export const login = async (req, res) => {
         resource: AUDIT_RESOURCES.AUTH,
         result: 'DENIED',
         beforeState: null,
-        afterState: null,
+        afterState: { failedAttempts: currentAttempts, lockUntil: lockUntil },
         metadata: { email, reason: 'INVALID_PASSWORD' }
       });
 
       return sendError(res, {
         status: 400,
         code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
-        message: 'Credenciales invalidas'
+        message
       });
+    }
+    
+    // If login is successful, reset attempts and lock
+    if (user.failedLoginAttempts > 0 || user.lockUntil) {
+      user.failedLoginAttempts = 0;
+      user.lockUntil = null;
+      // No necesitamos save() aquí porque se hace más abajo con lastLogin
     }
 
     const userEmail = await UserEmail.findOne({ where: { userId: user.id } });

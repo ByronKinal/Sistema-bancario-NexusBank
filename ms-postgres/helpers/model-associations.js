@@ -5,6 +5,7 @@ import { Account } from '../src/account/account.model.js';
 import { AccountRequest } from '../src/account/accountRequest.model.js';
 import { Transaction } from '../src/transaction/transaction.model.js';
 import { AuditEvent } from '../src/audit/auditEvent.model.js';
+import Notification from '../src/notifications/notification.model.js';
 
 export function initializeAssociations() {
     User.hasOne(UserProfile, { 
@@ -45,6 +46,16 @@ export function initializeAssociations() {
     UserRole.belongsTo(User, { 
         foreignKey: 'userId', 
         as: 'User' 
+    });
+
+    User.hasMany(Notification, {
+        foreignKey: 'userId',
+        as: 'Notifications',
+        onDelete: 'CASCADE'
+    });
+    Notification.belongsTo(User, {
+        foreignKey: 'userId',
+        as: 'User'
     });
 
     Role.hasMany(UserRole, { 

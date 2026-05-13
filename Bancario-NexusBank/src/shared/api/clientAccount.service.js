@@ -67,20 +67,25 @@ export const clientAccountService = {
   // Obtener perfil del usuario
   getUserProfile: async () => {
     try {
-      // If we already have the user in the auth store, return a lightweight profile
-      const cached = useAuthStore.getState().user;
-      if (cached) {
-        return {
-          Name: cached.name || cached.fullName || null,
-          Username: cached.username || cached.name || null,
-          ProfilePhotoUrl: cached.profilePhotoUrl || null,
-        };
-      }
-
       const response = await getFromBankingApi('/auth/profile');
-      return response.data?.profile || response.data || null;
+      return response.data || null;
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar perfil del usuario
+  updateUserProfile: async (payload) => {
+    try {
+      const response = await axiosClientFallback.put('/profile/edit', payload, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
       throw error;
     }
   },

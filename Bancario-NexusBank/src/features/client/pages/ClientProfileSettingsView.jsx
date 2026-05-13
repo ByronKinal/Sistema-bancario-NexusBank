@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-import { adminProfileService } from '../../../shared/api/adminProfile.service.js';
+import { clientAccountService } from '../../../shared/api/clientAccount.service.js';
 import axios from 'axios';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
@@ -109,11 +109,12 @@ export const ClientProfileSettingsView = () => {
 	const [uploadingPhoto, setUploadingPhoto] = useState(false);
 	const [dragActive, setDragActive] = useState(false);
 	const [profileData, setProfileData] = useState({ user: null, profile: null });
+	const [fraudAlerts, setFraudAlerts] = useState(true);
 	// Timestamp local para forzar re-render del <img> — evita duplicar ?t= en la URL
 	const [photoTs, setPhotoTs] = useState(() => Date.now());
 	const fileInputRef = useRef(null);
 
-	const { register, handleSubmit, reset, formState: { errors } } = useForm({
+	const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
 		defaultValues: {
 			fullName: '',
 			username: '',
@@ -122,7 +123,7 @@ export const ClientProfileSettingsView = () => {
 			address: '',
 			jobName: '',
 			income: '',
-		},
+		}
 	});
 
 	const profile = profileData.profile || {};
@@ -141,28 +142,21 @@ export const ClientProfileSettingsView = () => {
 	const photoBaseSrc = buildPhotoSrc(rawPhotoUrl);
 	const photoSrc = photoBaseSrc ? `${photoBaseSrc}?t=${photoTs}` : '';
 
+	// Effect to fetch initial profile data
 	useEffect(() => {
 		let active = true;
 
 		const loadProfile = async () => {
 			try {
 				setLoading(true);
-				const response = await adminProfileService.getOwnProfile();
+				const response = await clientAccountService.getUserProfile();
 				if (!active) return;
 
 				const nextUser = response.user || null;
 				const nextProfile = response.profile || null;
-
+				
 				setProfileData({ user: nextUser, profile: nextProfile });
-				reset({
-					fullName: nextProfile?.Name || '',
-					username: nextProfile?.Username || '',
-					phoneNumber: nextProfile?.PhoneNumber || '',
-					email: nextUser?.email || '',
-					address: nextProfile?.Address || '',
-					jobName: nextProfile?.JobName || '',
-					income: nextProfile?.Income ?? '',
-				});
+				setFraudAlerts(nextProfile?.FraudAlerts ?? true);
 			} catch (error) {
 				showError(error.response?.data?.msg || error.response?.data?.message || 'No se pudo cargar el perfil');
 			} finally {
@@ -172,7 +166,22 @@ export const ClientProfileSettingsView = () => {
 
 		loadProfile();
 		return () => { active = false; };
-	}, [reset]);
+	}, []); // Removed reset from dependency array
+
+	// Effect to update form values when profileData changes
+	useEffect(() => {
+		if (profileData.profile) {
+			reset({
+				fullName: profileData.profile.Name || '',
+				username: profileData.profile.Username || '',
+				phoneNumber: profileData.profile.PhoneNumber || '',
+				email: profileData.user?.email || '',
+				address: profileData.profile.Address || '',
+				jobName: profileData.profile.JobName || '',
+				income: profileData.profile.Income ?? '',
+			});
+		}
+	}, [profileData, reset]);
 
 	const handlePhotoUpload = async (file) => {
 		if (!file) return;
@@ -234,15 +243,17 @@ export const ClientProfileSettingsView = () => {
 	const onSubmit = async (data) => {
 		try {
 			setSaving(true);
-			const response = await adminProfileService.updateOwnProfile({
+			const payload = {
 				name: data.fullName,
 				username: data.username,
 				address: data.address,
 				jobName: data.jobName,
 				income: data.income === '' ? undefined : Number(data.income),
-				// Incluir la foto actual si existe para asegurar que se persiste
+				fraudAlerts: fraudAlerts,
 				profilePhotoUrl: profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
-			});
+			};
+			
+			const response = await clientAccountService.updateUserProfile(payload);
 
 			// Actualizar store INMEDIATAMENTE → navbar se actualiza al instante
 			updateUserProfile({
@@ -250,6 +261,7 @@ export const ClientProfileSettingsView = () => {
 				username: data.username,
 				// Preservar la foto
 				profilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
+				FraudAlerts: fraudAlerts,
 			});
 
 			// Actualizar estado local
@@ -263,6 +275,7 @@ export const ClientProfileSettingsView = () => {
 					JobName: data.jobName,
 					Income: data.income === '' ? prev.profile?.Income : Number(data.income),
 					ProfilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || prev.profile?.ProfilePhotoUrl,
+					FraudAlerts: fraudAlerts,
 				},
 			}));
 
@@ -298,176 +311,132 @@ export const ClientProfileSettingsView = () => {
 									<div className="mt-3 h-1 w-24 bg-[#C8A84B] rounded" />
 								</div>
 								<button
+									style={accentButtonStyle}
 									onClick={() => navigate('/clientdashboard')}
-									className="px-4 py-2 text-[#1A2E52] font-medium hover:bg-white/50 rounded transition"
 								>
-									← Volver
+									Volver al Dashboard
 								</button>
 							</div>
 							<p className="text-[#1A2E52] opacity-70">Actualiza tu información personal y mantén tu perfil al día.</p>
 						</div>
 
 						{/* Contenido Principal */}
-						<div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5 items-start">
-							{/* Tarjeta de Perfil */}
-							<div style={cardStyle} className="p-5 lg:p-6">
-								<div className="flex flex-col items-center text-center gap-4">
-									<div className="relative group">
-										<div
-											className="w-28 h-28 rounded-full border-4 border-[#C8A84B] bg-gradient-to-br from-[#dce7f0] to-[#c7d9ed] flex items-center justify-center shadow-xl overflow-hidden cursor-pointer relative"
-											style={{
-												backgroundColor: dragActive ? 'rgba(200, 168, 75, 0.1)' : undefined,
-												borderColor: dragActive ? '#d7bb70' : '#C8A84B',
-												transition: 'all 0.3s ease'
-											}}
-											onDragEnter={handleDrag}
-											onDragLeave={handleDrag}
-											onDragOver={handleDrag}
-											onDrop={handleDrop}
-										>
-											{photoSrc ? (
-												<img
-													key={photoTs}
-													alt={displayName}
-													className="w-full h-full object-cover"
-													src={photoSrc}
-												/>
-											) : (
-												<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-[#1A2E52]">
-													<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-													<circle cx="12" cy="7" r="4"></circle>
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+							{/* Left Column: Profile Card */}
+							<div className="md:col-span-1">
+								<div style={cardStyle} className="p-8 rounded-lg flex flex-col items-center text-center">
+									<div
+										className="relative w-40 h-40 rounded-full mb-5 cursor-pointer group"
+										onClick={() => fileInputRef.current?.click()}
+									>
+										{photoSrc ? (
+											<img
+												key={photoSrc}
+												src={photoSrc}
+												alt="Foto de perfil"
+												className="w-full h-full object-cover rounded-full"
+											/>
+										) : (
+											<div className="w-full h-full rounded-full bg-white flex items-center justify-center border-4 border-[#C8A84B] shadow-inner">
+												<svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+													<path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="#C8A84B"/>
 												</svg>
-											)}
-											<div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-												<span className="text-white text-xs font-bold">Cambiar foto</span>
 											</div>
-										</div>
-
-										<div
-											className="absolute -right-1 bottom-2 w-9 h-9 rounded-full border-2 border-white bg-[#C8A84B] flex items-center justify-center text-white shadow-lg cursor-pointer hover:brightness-110 transition"
-											onClick={() => fileInputRef.current?.click()}
-										>
-											<span className="text-sm font-black">✎</span>
-										</div>
-
-										<input
-											type="file"
-											ref={fileInputRef}
-											onChange={handleFileInputChange}
-											accept="image/*"
-											style={{ display: 'none' }}
-											disabled={uploadingPhoto}
-										/>
-									</div>
-
-									<div>
-										<h2 className="text-2xl font-bold text-[#1A2E52]">
-											{loading ? 'Cargando...' : displayName}
-										</h2>
-										<p className="mt-1 text-[#C8A84B] font-semibold">{roleLabel}</p>
-										{uploadingPhoto && <p className="mt-1 text-xs text-slate-500">Subiendo foto...</p>}
-									</div>
-
-									<div className="w-full rounded-xl border border-[#1A2E52]/10 bg-white/60 px-4 py-3 text-left">
-										<div className="flex items-center justify-between text-sm">
-											<span className="text-[#1A2E52] opacity-70">Usuario</span>
-											<span className="font-semibold text-[#1A2E52]">{displayUsername}</span>
-										</div>
-										<div className="mt-2 flex items-center justify-between text-sm">
-											<span className="text-[#1A2E52] opacity-70">Estado</span>
-											<span className="font-semibold text-emerald-600">Activo</span>
-										</div>
-										<div className="mt-2 flex items-center justify-between text-sm">
-											<span className="text-[#1A2E52] opacity-70">Miembro desde</span>
-											<span className="font-semibold text-[#1A2E52]">{formatRegistrationDate()}</span>
+										)}
+										<div className="absolute inset-0 rounded-full bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer">
+											<span className="text-white text-sm font-semibold text-center px-2">Cambiar foto</span>
 										</div>
 									</div>
-
-									<div className="w-full rounded-xl border border-[#1A2E52]/10 bg-white/60 px-4 py-4 mt-2">
-										<div className="flex flex-col gap-3">
-											<div>
-												<p className="text-xs text-[#1A2E52] opacity-70 font-medium">Código</p>
-												<p className="mt-1 text-sm font-bold text-[#C8A84B]">{getUserCode()}</p>
-											</div>
-											<div>
-												<p className="text-xs text-[#1A2E52] opacity-70 font-medium">Rol</p>
-												<p className="mt-1 text-sm font-bold text-[#1A2E52] uppercase">{user?.role}</p>
-											</div>
-										</div>
+									<input
+										type="file"
+										ref={fileInputRef}
+										className="hidden"
+										accept="image/png, image/jpeg"
+										onChange={handleFileInputChange}
+									/>
+									<h2 className="text-2xl font-bold">{displayName}</h2>
+									<p className="text-sm font-medium text-[#C8A84B]">{roleLabel}</p>
+									<div className="w-full border-t border-gray-300 my-5" />
+									<div className="w-full text-left text-sm space-y-3">
+										<div className="flex justify-between"><span>Usuario:</span> <span className="font-semibold">{displayUsername}</span></div>
+										<div className="flex justify-between"><span>Estado:</span> <span className="font-semibold text-green-600">Activo</span></div>
+										<div className="flex justify-between"><span>Miembro desde:</span> <span className="font-semibold">{formatRegistrationDate()}</span></div>
+										<div className="flex justify-between"><span>Código:</span> <span className="font-semibold text-[#C8A84B]">{getUserCode()}</span></div>
 									</div>
 								</div>
 							</div>
 
-							{/* Tarjeta de Formulario */}
-							<div style={cardStyle} className="p-5 lg:p-6">
-								<div className="flex items-center justify-between flex-wrap gap-4 mb-5">
-									<div>
-										<h3 className="text-2xl font-bold text-[#1A2E52]">Información Personal</h3>
-										<div className="mt-2 h-px w-24 bg-[#C8A84B]" />
-									</div>
-									<div className="text-sm text-[#1A2E52] opacity-70 font-medium">Mantén tu perfil actualizado.</div>
-								</div>
+							{/* Right Column: Form */}
+							<div className="md:col-span-2">
+								<form onSubmit={handleSubmit(onSubmit)}>
+									<div style={cardStyle} className="p-8 rounded-lg">
+										<h2 className="text-2xl font-bold mb-1">Información Personal</h2>
+										<p className="text-sm text-gray-500 mb-6">Mantén tu perfil actualizado.</p>
 
-								{loading ? (
-									<div className="py-20 flex items-center justify-center">
-										<div className="w-14 h-14 rounded-full border-4 border-[#1A2E52]/10 border-t-[#C8A84B] animate-spin" />
-									</div>
-								) : (
-									<form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+											{/* Fields here */}
 											<div>
-												<label style={fieldLabelStyle}>Nombre completo</label>
-												<input type="text" style={inputBaseStyle} {...register('fullName', { required: 'Este campo es obligatorio' })} />
-												{errors.fullName && <p className="mt-2 text-sm text-red-600">{errors.fullName.message}</p>}
+												<label htmlFor="fullName" style={fieldLabelStyle}>Nombre completo</label>
+												<input id="fullName" type="text" style={inputBaseStyle} {...register('fullName')} />
 											</div>
 											<div>
-												<label style={fieldLabelStyle}>Username</label>
-												<input type="text" style={inputBaseStyle} {...register('username', { required: 'El username es obligatorio' })} />
-												{errors.username && <p className="mt-2 text-sm text-red-600">{errors.username.message}</p>}
+												<label htmlFor="username" style={fieldLabelStyle}>Username</label>
+												<input id="username" type="text" style={inputBaseStyle} {...register('username')} />
 											</div>
 											<div>
-												<label style={fieldLabelStyle}>Teléfono</label>
-												<input type="text" readOnly style={readOnlyInputStyle} {...register('phoneNumber')} />
-												<p className="mt-2 text-xs text-[#1A2E52] opacity-60">Solo lectura desde el perfil actual.</p>
+												<label htmlFor="phoneNumber" style={fieldLabelStyle}>Teléfono</label>
+												<input id="phoneNumber" type="text" style={readOnlyInputStyle} {...register('phoneNumber')} readOnly />
+												<p className='text-xs text-gray-400 mt-1 pl-1'>Solo lectura desde el perfil actual.</p>
 											</div>
 											<div>
-												<label style={fieldLabelStyle}>Correo electrónico</label>
-												<input type="email" readOnly style={readOnlyInputStyle} {...register('email')} />
-												<p className="mt-2 text-xs text-[#1A2E52] opacity-60">El correo no se modifica desde esta pantalla.</p>
+												<label htmlFor="email" style={fieldLabelStyle}>Correo electrónico</label>
+												<input id="email" type="email" style={readOnlyInputStyle} {...register('email')} readOnly />
+												<p className='text-xs text-gray-400 mt-1 pl-1'>El correo no se modifica desde esta pantalla.</p>
+											</div>
+											<div className="md:col-span-2">
+												<label htmlFor="address" style={fieldLabelStyle}>Dirección</label>
+												<input id="address" type="text" style={inputBaseStyle} {...register('address')} />
 											</div>
 											<div>
-												<label style={fieldLabelStyle}>Dirección</label>
-												<input type="text" style={inputBaseStyle} {...register('address')} />
+												<label htmlFor="jobName" style={fieldLabelStyle}>Trabajo / Ocupación</label>
+												<input id="jobName" type="text" style={inputBaseStyle} {...register('jobName')} />
 											</div>
 											<div>
-												<label style={fieldLabelStyle}>Trabajo / Ocupación</label>
-												<input type="text" style={inputBaseStyle} {...register('jobName')} />
-											</div>
-											<div>
-												<label style={fieldLabelStyle}>Ingresos mensuales</label>
-												<input type="number" min="0" step="0.01" style={inputBaseStyle} {...register('income')} />
+												<label htmlFor="income" style={fieldLabelStyle}>Ingresos mensuales</label>
+												<input id="income" type="number" style={inputBaseStyle} {...register('income')} />
 											</div>
 										</div>
 
-										<div className="flex flex-col sm:flex-row gap-3 pt-2">
-											<button
-												type="submit"
-												style={accentButtonStyle}
-												disabled={saving}
-												className={saving ? 'opacity-70 cursor-not-allowed' : 'hover:brightness-105 transition'}
-											>
-												{saving ? 'Guardando...' : 'Guardar cambios'}
-											</button>
-											<button
-												type="button"
-												style={secondaryButtonStyle}
-												onClick={() => navigate('/clientdashboard')}
-											>
+										{/* Security Section */}
+										<div className="w-full border-t border-gray-300 my-6" />
+										<h3 className="text-xl font-semibold mb-4">Seguridad</h3>
+										<button
+											type="button"
+											onClick={() => setFraudAlerts(prev => !prev)}
+											className={`w-full max-w-sm mx-auto text-left p-3 rounded-lg text-sm font-medium transition-all duration-300 ease-in-out flex items-center justify-center shadow-md transform hover:scale-105 ${
+												fraudAlerts
+													? 'bg-green-100 text-green-800'
+													: 'bg-red-100 text-red-800'
+											}`}
+										>
+											{fraudAlerts ? '🟢 Alertas de fraude activadas' : '🔴 Alertas de fraude desactivadas'}
+										</button>
+										<p className="text-xs text-gray-500 mt-3 text-center max-w-sm mx-auto">
+											{fraudAlerts
+												? "Recibirás notificaciones sobre actividades sospechosas."
+												: "No recibirás alertas de seguridad."}
+										</p>
+
+										<div className="flex items-center justify-end mt-8 gap-4">
+											<button type="button" onClick={() => reset()} style={secondaryButtonStyle}>
 												Cancelar
 											</button>
+											<button type="submit" style={accentButtonStyle} disabled={saving || !isDirty && fraudAlerts === (profileData.profile?.FraudAlerts ?? true)}>
+												{saving ? 'Guardando...' : 'Guardar cambios'}
+											</button>
 										</div>
-									</form>
-								)}
+									</div>
+								</form>
 							</div>
 						</div>
 					</div>

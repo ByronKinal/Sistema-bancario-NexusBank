@@ -14,6 +14,8 @@ import {
     recordAuditEvent
 } from '../../services/audit.service.js';
 import axios from 'axios';
+import { sendTransferReceivedEmail } from '../../services/email.service.js';
+import notificationService from '../../services/notification.service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
@@ -439,9 +441,25 @@ export const approveDepositRequest = async (req, res) => {
 
         await dbTransaction.commit();
 
-        const destinationOwner = await getUserEmailAndName(destinationAccount.userId);
-        if (destinationOwner) {
-            await sendEmailSafe(() => sendDepositAlertEmail(destinationOwner.email, destinationOwner.name, {
+        // Alerta de depósito excesivo
+        const depositAmount = Number(depositRequest.amount);
+        if (depositAmount > 10000) {
+          await notificationService.sendFraudAlert(destinationAccount.userId, {
+            title: 'Depósito Excesivo Detectado',
+            message: `Se ha acreditado un depósito de Q${depositAmount.toFixed(2)} en tu cuenta ${destinationAccount.accountNumber}.`,
+            emailType: 'FRAUD',
+            emailData: {
+              alertType: 'EXCESSIVE_DEPOSIT',
+              severity: 'HIGH',
+              description: `Se detectó un depósito por un monto elevado (Q${depositAmount.toFixed(2)}).`,
+              detectedAt: new Date()
+            }
+          });
+        }
+
+        const accountOwner = await getUserEmailAndName(destinationAccount.userId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendDepositAlertEmail(accountOwner.email, accountOwner.name, {
                 accountNumber: destinationAccount.accountNumber,
                 amount: requestAmount,
                 newBalance: destinationAccount.accountBalance

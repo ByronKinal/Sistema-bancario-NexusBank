@@ -21,6 +21,14 @@ export const User = sequelize.define('User', {
         type: DataTypes.BOOLEAN,
         defaultValue: true
     },
+    failedLoginAttempts: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0
+    },
+    lockUntil: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
     lastLogin: {
         type: DataTypes.DATE
     },
@@ -85,6 +93,11 @@ export const UserProfile = sequelize.define('UserProfile', {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
         field: 'income'
+    },
+    FraudAlerts: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
+        field: 'fraudAlerts'
     },
     UsernameUpdatedAt: {
         type: DataTypes.DATE,

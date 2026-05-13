@@ -448,7 +448,8 @@ export const editOwnProfile = async (req, res) => {
       address,
       jobName,
       income,
-      profilePhotoUrl
+      profilePhotoUrl,
+      fraudAlerts
     } = req.body;
 
     const user = await User.findByPk(userId, {
@@ -523,14 +524,11 @@ export const editOwnProfile = async (req, res) => {
     }
 
     if (income !== undefined) {
-      const numericIncome = Number(income);
-      if (!Number.isFinite(numericIncome) || numericIncome < 0) {
-        return res.status(400).json({
-          success: false,
-          msg: 'Ingreso mensual invalido'
-        });
-      }
-      updateData.Income = numericIncome;
+      updateData.Income = income;
+    }
+    
+    if (fraudAlerts !== undefined) {
+      updateData.FraudAlerts = fraudAlerts;
     }
 
     if (profilePhotoUrl !== undefined) {
@@ -544,7 +542,23 @@ export const editOwnProfile = async (req, res) => {
       });
     }
 
+    const previousProfile = { ...user.UserProfile.get() };
     await user.UserProfile.update(updateData);
+
+    // Notificación por cambios importantes en el perfil
+    if (updateData.Username || updateData.FullName || updateData.Name || updateData.Address) {
+      await notificationService.sendFraudAlert(userId, {
+        title: 'Actualización de Datos de Perfil',
+        message: 'Se han realizado cambios importantes en tu información personal. Si no fuiste tú, contacta a soporte.',
+        emailType: 'FRAUD',
+        emailData: {
+          alertType: 'PROFILE_UPDATE',
+          severity: 'LOW',
+          description: 'Se detectó una actualización en los datos sensibles del perfil.',
+          detectedAt: new Date()
+        }
+      });
+    }
 
     await user.reload({ include: [{ model: UserProfile, as: 'UserProfile' }] });
 
