@@ -3,12 +3,9 @@ import { axiosAdmin } from '../../api/api.js';
 import { showError, showSuccess } from '../../utils/toast.js';
 
 const PROMOTION_TYPES = [
-  'DEPOSITO_CASHBACK',
-  'TRANSFERENCIA_DESCUENTO',
-  'TRANSFERENCIA_PROPIA_BONUS',
-  'TRANSACCIONES_FRECUENTES',
-  'SALDO_MINIMO_REWARD',
-  'APERTURA_CUENTA_BONUS'
+  'APERTURA_CUENTA_BONUS',
+  'PRIMER_DEPOSITO_BONUS',
+  'TRANSFERENCIA_RECIBIDA_BONUS'
 ];
 
 const NUMERIC_FIELDS = new Set([
@@ -50,12 +47,9 @@ const EDITABLE_FIELDS = new Set([
 
 const formatPromotionType = (type) => {
   const typeMap = {
-    'DEPOSITO_CASHBACK': 'Depósito Cashback',
-    'TRANSFERENCIA_DESCUENTO': 'Transferencia Descuento',
-    'TRANSFERENCIA_PROPIA_BONUS': 'Transferencia Propia Bonus',
-    'TRANSACCIONES_FRECUENTES': 'Transacciones Frecuentes',
-    'SALDO_MINIMO_REWARD': 'Saldo Mínimo Reward',
-    'APERTURA_CUENTA_BONUS': 'Apertura de Cuenta Bonus'
+    'APERTURA_CUENTA_BONUS': 'Apertura de Cuenta Bonus',
+    'PRIMER_DEPOSITO_BONUS': 'Primer Depósito Bonus',
+    'TRANSFERENCIA_RECIBIDA_BONUS': 'Transferencia Recibida Bonus'
   };
   return typeMap[type] || type;
 };

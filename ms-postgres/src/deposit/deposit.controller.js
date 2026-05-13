@@ -403,7 +403,7 @@ export const approveDepositRequest = async (req, res) => {
                 
                 const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
                     couponId: depositRequest.appliedCouponId,
-                    operationType: 'DEPOSITO',
+                    operationType: 'PRIMER_DEPOSITO',
                     amount: requestAmount
                 });
 

@@ -63,6 +63,7 @@ export const Transfers = () => {
   const [recipientType, setRecipientType] = useState('TERCERO');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [couponId, setCouponId] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
   const [recentTransfers, setRecentTransfers] = useState([]);
   const [selectedTransferId, setSelectedTransferId] = useState(null);
@@ -105,6 +106,10 @@ export const Transfers = () => {
 
     if (prefill.prefillDescription) {
       setDescription(prefill.prefillDescription);
+    }
+
+    if (prefill.prefillCouponId) {
+      setCouponId(prefill.prefillCouponId);
     }
 
     setCurrentStep(1);
@@ -334,6 +339,7 @@ export const Transfers = () => {
       recipientType,
       amount: normalizedAmount,
       description: description.trim() || 'Transferencia de prueba',
+      ...(couponId.trim() ? { couponId: couponId.trim() } : {})
     };
   };
 
@@ -375,6 +381,7 @@ export const Transfers = () => {
       showSuccess('Transferencia procesada correctamente.');
       setAmount('');
       setDescription('');
+      setCouponId('');
       setDestinationAccountNumber('');
       setRecipientType('TERCERO');
       setPendingTransfer(null);
@@ -541,6 +548,19 @@ export const Transfers = () => {
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </div>
+
+                {recipientType === 'TERCERO' && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Código de cupón (Opcional)</label>
+                    <input
+                      type="text"
+                      className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      placeholder="Ej: cat_123..."
+                      value={couponId}
+                      onChange={(e) => setCouponId(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -578,6 +598,9 @@ export const Transfers = () => {
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Cuenta destino</span><span>{pendingTransfer.destinationAccountNumber}</span></div>
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Tipo destinatario</span><span>{recipientTypes.find((item) => item.value === pendingTransfer.recipientType)?.label || pendingTransfer.recipientType}</span></div>
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Monto</span><span className="font-bold">Q {formatAmount(pendingTransfer.amount)}</span></div>
+                  {pendingTransfer.couponId && (
+                    <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Cupón Promocional</span><span className="text-[#C8A84B] font-bold">{pendingTransfer.couponId}</span></div>
+                  )}
                   <div className="flex justify-between gap-3"><span className="font-semibold text-[#1A2E52]">Descripción</span><span className="text-right">{pendingTransfer.description || 'Sin descripción'}</span></div>
                 </div>
 

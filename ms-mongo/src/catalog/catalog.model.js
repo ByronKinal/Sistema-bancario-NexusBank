@@ -33,12 +33,9 @@ const catalogSchema = new mongoose.Schema(
     promotionType: {
       type: String,
       enum: [
-        'DEPOSITO_CASHBACK',
-        'TRANSFERENCIA_DESCUENTO',
-        'TRANSFERENCIA_PROPIA_BONUS',
-        'TRANSACCIONES_FRECUENTES',
-        'SALDO_MINIMO_REWARD',
-        'APERTURA_CUENTA_BONUS'
+        'APERTURA_CUENTA_BONUS',
+        'PRIMER_DEPOSITO_BONUS',
+        'TRANSFERENCIA_RECIBIDA_BONUS'
       ],
       required: true
     },

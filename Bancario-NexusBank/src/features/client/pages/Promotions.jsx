@@ -44,11 +44,8 @@ const Promotions = () => {
 
   const getPromotionInstructions = (type) => {
     const instructions = {
-      'DEPOSITO_CASHBACK': 'Realiza un depósito y recibe un porcentaje de vuelta (cashback) automáticamente en tu cuenta principal.',
-      'TRANSFERENCIA_DESCUENTO': 'Haz una transferencia y disfruta de un descuento en la comisión o tarifa de envío aplicable.',
-      'TRANSFERENCIA_PROPIA_BONUS': 'Transfiere saldo entre tus propias cuentas y recibe puntos o un bono extra acreditado de inmediato.',
-      'TRANSACCIONES_FRECUENTES': 'Mantén un uso frecuente de tu cuenta realizando múltiples operaciones y gana recompensas especiales.',
-      'SALDO_MINIMO_REWARD': 'Mantén el saldo mínimo requerido durante el período estipulado y recibe un bono en tu estado de cuenta.',
+      'PRIMER_DEPOSITO_BONUS': 'Realiza tu primer depósito y recibe un porcentaje de vuelta (cashback) automáticamente en tu cuenta principal.',
+      'TRANSFERENCIA_RECIBIDA_BONUS': 'Recibe una transferencia de otra persona y recibe un porcentaje extra o un bono directamente acreditado a tu balance.',
       'APERTURA_CUENTA_BONUS': 'Abre una cuenta adicional y recibe automáticamente un bono de bienvenida.'
     };
     return instructions[type] || 'Aprovecha esta promoción desde tu panel interactivo para obtener sus beneficios.';

@@ -4,6 +4,7 @@ import { generateAccountNumber } from '../../helpers/account-generator.js';
 import { getExchangeRate } from '../../helpers/fx-service.js';
 import sequelize from '../../configs/db.js';
 import { Op } from 'sequelize';
+import { Transaction } from '../transaction/transaction.model.js';
 import { AccountLimitAudit } from './accountLimitAudit.model.js';
 import { AccountBlockHistory } from './accountBlockHistory.model.js';
 import { User, UserProfile } from '../user/user.model.js';
@@ -25,6 +26,7 @@ import {
     recordAuditEvent
 } from '../../services/audit.service.js';
 import { generateEmailVerificationToken } from '../../services/auth/token.service.js';
+import axios from 'axios';
 
 const findUserByRequestPayload = async ({ userId, email }) => {
     const normalizedUserId = (userId || '').toString().trim();
@@ -194,7 +196,8 @@ export const createAccount = async (req, res) => {
             accountType,
             idCliente,
             perTransactionLimit,
-            dailyTransactionLimit
+            dailyTransactionLimit,
+            couponId
         } = req.body;
 
         if (!idCliente) {
@@ -208,12 +211,36 @@ export const createAccount = async (req, res) => {
         
         const accountNumber = await generateAccountNumber(accountType);
 
+        let initialBalance = 0;
+        let appliedCouponAmount = 0;
+
+        if (couponId) {
+            try {
+                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId: couponId,
+                    operationType: 'APERTURA_CUENTA',
+                    amount: 0
+                });
+
+                if (response.data.success && response.data.benefit) {
+                    const benefit = response.data.benefit;
+                    if (benefit.type === 'CASHBACK') {
+                        initialBalance = benefit.amount;
+                        appliedCouponAmount = benefit.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating coupon for account opening:', err.message);
+            }
+        }
+
         const accountPayload = {
             accountNumber,
             userId: targetUserId,
             accountType,
             status: true,
-            accountBalance: 0
+            accountBalance: initialBalance
         };
 
         if (perTransactionLimit !== undefined) {
@@ -228,6 +255,18 @@ export const createAccount = async (req, res) => {
         accountPayload.lastAdminChangeReason = 'Creacion de cuenta';
 
         const account = await Account.create(accountPayload);
+
+        if (appliedCouponAmount > 0) {
+            await Transaction.create({
+                accountId: account.id,
+                type: 'DEPOSITO',
+                amount: appliedCouponAmount.toFixed(2),
+                description: 'Bono por apertura de cuenta',
+                balanceAfter: initialBalance.toFixed(2),
+                status: 'COMPLETADA',
+                appliedCouponId: couponId
+            });
+        }
 
         const createdAccountOwner = await getUserEmailAndName(targetUserId);
         if (createdAccountOwner) {

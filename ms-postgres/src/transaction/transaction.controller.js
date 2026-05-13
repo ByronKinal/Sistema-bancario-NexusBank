@@ -6,6 +6,7 @@ import { Transaction } from './transaction.model.js';
 import { TransactionAudit } from './transactionAudit.model.js';
 import { User, UserProfile } from '../user/user.model.js';
 import fraudDetectionService from '../../services/fraud-detection.service.js';
+import axios from 'axios';
 import { applyExposureRulesByRole } from '../user/services/user-masking.service.js';
 import {
     sendAccountRejectedEmail,
@@ -171,7 +172,8 @@ export const createTransfer = async (req, res) => {
             destinationAccountNumber,
             recipientType,
             amount,
-            description
+            description,
+            couponId
         } = req.body;
 
         if (!sourceAccountNumber || !destinationAccountNumber || !amount || !recipientType) {
@@ -449,9 +451,30 @@ export const createTransfer = async (req, res) => {
         }
 
         let finalTransferAmount = numericAmount;
+        let transferBonusAmount = 0;
+
+        if (couponId && normalizedRecipientType === 'TERCERO') {
+            try {
+                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId,
+                    operationType: 'TRANSFERENCIA_RECIBIDA',
+                    amount: numericAmount
+                });
+
+                if (response.data && response.data.valid) {
+                    const couponInfo = response.data.benefit;
+                    if (couponInfo && couponInfo.type === 'CASHBACK') {
+                        transferBonusAmount = couponInfo.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating transfer coupon with ms-mongo:', err.message);
+            }
+        }
 
         const sourceNewBalance = sourceBalance - finalTransferAmount;
-        const destinationNewBalance = destinationBalance + numericAmount;
+        const destinationNewBalance = destinationBalance + numericAmount + transferBonusAmount;
 
         sourceAccount.accountBalance = sourceNewBalance.toFixed(2);
         destinationAccount.accountBalance = destinationNewBalance.toFixed(2);
@@ -468,7 +491,8 @@ export const createTransfer = async (req, res) => {
             description: transferDescription,
             balanceAfter: sourceNewBalance.toFixed(2),
             relatedAccountId: destinationAccount.id,
-            status: 'COMPLETADA'
+            status: 'COMPLETADA',
+            appliedCouponId: couponId
         }, { transaction: dbTransaction });
 
         const totalReceivedAmount = numericAmount;
@@ -477,10 +501,23 @@ export const createTransfer = async (req, res) => {
             type: 'TRANSFERENCIA_RECIBIDA',
             amount: totalReceivedAmount.toFixed(2),
             description: transferDescription,
-            balanceAfter: destinationNewBalance.toFixed(2),
+            balanceAfter: (destinationBalance + numericAmount).toFixed(2),
             relatedAccountId: sourceAccount.id,
             status: 'COMPLETADA'
         }, { transaction: dbTransaction });
+
+        if (transferBonusAmount > 0) {
+            await Transaction.create({
+                accountId: destinationAccount.id,
+                type: 'DEPOSITO',
+                amount: transferBonusAmount.toFixed(2),
+                description: 'Bono promocional por transferencia recibida',
+                balanceAfter: destinationNewBalance.toFixed(2),
+                relatedAccountId: sourceAccount.id,
+                status: 'COMPLETADA',
+                appliedCouponId: couponId
+            }, { transaction: dbTransaction });
+        }
 
         await dbTransaction.commit();
 
@@ -1256,7 +1293,7 @@ export const getEmployeeAccountTransactions = async (req, res) => {
             id: account.id,
             accountNumber: account.accountNumber,
             accountType: account.accountType,
-            status: account.status,
+            status: account.status ? 'Activa' : 'Inactiva',
             owner: maskedOwner ? {
                 id: maskedOwner.id,
                 email: maskedOwner.email || 'N/A',
