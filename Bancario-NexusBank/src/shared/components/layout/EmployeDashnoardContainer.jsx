@@ -8,6 +8,7 @@ const EmployeDashnoardContainer = () => {
     const [deposits, setDeposits] = useState([]);
     const [selectedDepositId, setSelectedDepositId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('TODOS');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newAccountNumber, setNewAccountNumber] = useState('');
@@ -137,6 +138,8 @@ const EmployeDashnoardContainer = () => {
     const selectedDeposit = deposits.find((item) => item.id === selectedDepositId) || deposits[0] || null;
 
     const filteredDeposits = deposits.filter((deposit) => {
+        const searchValue = `${deposit.id} ${deposit.accountNumber} ${deposit.bank} ${deposit.description}`.toLowerCase();
+        const matchesSearch = searchValue.includes(searchTerm.toLowerCase());
         const statusMatch =
             filterStatus === 'TODOS'
                 ? true
@@ -145,7 +148,7 @@ const EmployeDashnoardContainer = () => {
                     : filterStatus === 'APROBADO'
                         ? deposit.status === 'COMPLETADA'
                         : ['FALLIDA', 'REVERTIDA'].includes(deposit.status);
-        return statusMatch;
+        return matchesSearch && statusMatch;
     });
 
     const summary = {
@@ -232,6 +235,13 @@ const EmployeDashnoardContainer = () => {
                                     <p className="text-sm text-gray-500 mt-1">Selecciona un depósito para ver el detalle completo.</p>
                                 </div>
                                 <div className="filters-container">
+                                    <input
+                                        type="text"
+                                        className="search-input"
+                                        placeholder="Buscar referencia, cuenta o banco..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
                                     <select
                                         className="filter-select"
                                         value={filterStatus}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { axiosAdmin } from '../../api/api.js';
+import { adminDashboardService } from '../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../utils/toast.js';
 
 const PROMOTION_TYPES = [
@@ -191,54 +191,27 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
 
     setLoading(true);
     try {
-      // Preparar datos para enviar (normaliza tipos y respeta campos permitidos por backend)
+      // Limpiar campos vacíos antes de enviar
       const payload = {};
-      Object.entries(formData).forEach(([key, value]) => {
-        if (mode === 'edit' && !EDITABLE_FIELDS.has(key)) {
-          return;
-        }
-
-        if (key === 'reason') {
-          if (value && String(value).trim()) payload[key] = String(value).trim();
-          return;
-        }
-
-        if (key === 'isExclusive') {
-          if (mode === 'create') {
-            if (value === true) payload[key] = true;
-          } else {
-            payload[key] = Boolean(value);
-          }
-          return;
-        }
-
-        if (value === '' || value === null || value === undefined) {
-          return;
-        }
-
-        if (NUMERIC_FIELDS.has(key)) {
-          const normalized = Number(value);
-          if (!Number.isNaN(normalized)) payload[key] = normalized;
-          return;
-        }
-
-        if (mode === 'create') {
-          payload[key] = value;
-        } else {
-          payload[key] = value;
+      Object.keys(formData).forEach(key => {
+        if (formData[key] !== '' && formData[key] !== null) {
+          payload[key] = NUMERIC_FIELDS.has(key) ? Number(formData[key]) : formData[key];
         }
       });
 
       if (mode === 'create') {
-        await axiosAdmin.post('/catalog/admin/create', payload);
+        await adminDashboardService.createPromotion(payload);
+        showSuccess('Promoción creada con éxito');
       } else {
-        await axiosAdmin.put(`/catalog/admin/${promotion._id}`, payload);
+        await adminDashboardService.updatePromotion(promotion.id || promotion._id, payload);
+        showSuccess('Promoción actualizada con éxito');
       }
 
-      onSave();
+      onSave(); // Refresca la lista
+      onClose(); // Cierra el modal
     } catch (error) {
-      console.error('Error submitting form:', error);
-      const message = error.response?.data?.message || error.message || 'Error al guardar promoción';
+      console.error('Error saving promotion:', error);
+      const message = error.response?.data?.message || 'Error al guardar la promoción';
       showError(message);
     } finally {
       setLoading(false);
