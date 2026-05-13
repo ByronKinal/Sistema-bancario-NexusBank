@@ -79,7 +79,7 @@ const AdminNotifications = () => {
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 360, background: '#0b2b52', color: '#fff', borderRadius: 8, boxShadow: '0 8px 24px rgba(2,8,18,0.3)', zIndex: 60, padding: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ fontWeight: 700 }}>Solicitudes de apertura</div>
-            <button onClick={() => { setIsOpen(false); navigate('/AdminDashboard/pending-requests'); }} style={{ background: 'transparent', border: 'none', color: '#9fb3d6', cursor: 'pointer' }}>Ver todas</button>
+            <button onClick={() => { setIsOpen(false); navigate('/AdminDashboard/account-requests-history'); }} style={{ background: 'transparent', border: 'none', color: '#9fb3d6', cursor: 'pointer' }}>Ver todas</button>
           </div>
 
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>

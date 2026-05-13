@@ -40,6 +40,17 @@ router.get('/admin/account-requests', verifyTokenAndGetUser, verifyRoles(['Admin
   }
 });
 
+router.get('/admin/account-requests/all', verifyTokenAndGetUser, verifyRoles(['Admin']), async (req, res) => {
+  try {
+    const requests = await AccountRequest.findAll({ 
+      order: [['createdAt', 'DESC']] 
+    });
+    return res.status(200).json({ success: true, data: requests });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error', error: error.message });
+  }
+});
+
 router.post('/admin/account-requests/:id/approve', verifyTokenAndGetUser, verifyRoles(['Admin']), approveAccountRequest);
 
 router.post('/admin/account-requests/:id/reject', verifyTokenAndGetUser, verifyRoles(['Admin']), rejectAccountRequest);

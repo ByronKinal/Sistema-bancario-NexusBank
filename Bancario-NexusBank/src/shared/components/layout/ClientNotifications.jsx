@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+  import React, { useEffect, useRef, useState } from 'react';
 import { notificationService } from '../../api/notification.service.js';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,18 +26,19 @@ const ClientNotifications = () => {
   }, []);
 
   useEffect(() => {
-    const onDoc = (e) => { if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false); };
+    const onDoc = (e) => { 
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setIsOpen(false); 
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const handleMarkRead = async (id, url) => {
+  const handleMarkRead = async (id) => {
     try {
       await notificationService.markAsRead(id);
-      setList(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-      if (url) navigate(url);
+      setList(prev => prev.filter(n => n.id !== id));
     } catch (err) {
-      console.error('Error marking read', err);
+      console.error('Error marking notification as read:', err);
     }
   };
 
@@ -64,18 +65,23 @@ const ClientNotifications = () => {
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
             {loading ? (
               <div style={{ padding: 16 }}>Cargando...</div>
-            ) : list.length === 0 ? (
-              <div style={{ padding: 16 }}>No tienes notificaciones.</div>
+            ) : list.filter(n => !n.read).length === 0 ? (
+              <div style={{ padding: 16 }}>No tienes notificaciones nuevas.</div>
             ) : (
-              list.slice(0, 8).map(n => (
-                <div key={n.id} style={{ display: 'flex', gap: 12, padding: '10px 12px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)', background: n.read ? 'transparent' : 'rgba(255,255,255,0.03)' }}>
+              list.filter(n => !n.read).slice(0, 8).map(n => (
+                <div key={n.id} style={{ display: 'flex', gap: 12, padding: '10px 12px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.03)' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{n.title}</div>
                     <div style={{ fontSize: 12, color: '#9fb3d6' }}>{n.message}</div>
                     <div style={{ fontSize: 11, color: '#6b8db0', marginTop: 6 }}>{new Date(n.createdAt).toLocaleString()}</div>
                   </div>
                   <div>
-                    {!n.read && (<button onClick={() => handleMarkRead(n.id, n.url)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Marcar</button>)}
+                    <button 
+                      onClick={() => handleMarkRead(n.id)} 
+                      style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+                    >
+                      Marcar
+                    </button>
                   </div>
                 </div>
               ))
