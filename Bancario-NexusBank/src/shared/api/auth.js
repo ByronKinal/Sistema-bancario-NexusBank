@@ -13,3 +13,7 @@ export const resetPassword = async (data) => {
   return axiosAuth.post('/auth/reset-password', data);
 };
 
+export const refreshSession = async (refreshToken) => {
+  return axiosAuth.post('/auth/refresh', { refreshToken });
+};
+

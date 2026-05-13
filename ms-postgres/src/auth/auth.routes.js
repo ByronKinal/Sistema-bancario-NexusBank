@@ -6,6 +6,7 @@ import {
   resendVerification,
   forgotPassword,
   resetPassword,
+  refreshSession,
   getProfile,
   uploadProfilePhotoController
 } from './auth.controller.js';
@@ -14,7 +15,8 @@ import {
   validateRegister,
   validateResendVerification,
   validateForgotPassword,
-  validateResetPassword
+  validateResetPassword,
+  validateRefreshToken
 } from '../../middlewares/auth-validations.js';
 import {
   loginLimiter,
@@ -43,6 +45,8 @@ router.post('/resend-verification', verifyEmailLimiter, validateResendVerificati
 router.post('/forgot-password', forgotPasswordLimiter, validateForgotPassword, forgotPassword);
 
 router.post('/reset-password', validateResetPassword, resetPassword);
+
+router.post('/refresh', validateRefreshToken, refreshSession);
 
 router.get('/profile', validateBearerToken, getProfile);
 

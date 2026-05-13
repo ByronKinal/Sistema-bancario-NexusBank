@@ -34,6 +34,45 @@ import {
 
 const PASSWORD_RESET_EXPIRES_MINUTES = 60;
 
+const buildAccessTokenPayload = (user, role) => ({
+  id: user.id,
+  email: user.email,
+  role: normalizeRole(role)
+});
+
+const createAccessToken = (user, role) => jwt.sign(
+  buildAccessTokenPayload(user, role),
+  config.jwtSecret,
+  { expiresIn: config.jwtExpiresIn }
+);
+
+const createRefreshToken = (user, role) => jwt.sign(
+  {
+    ...buildAccessTokenPayload(user, role),
+    type: 'refresh'
+  },
+  config.jwtRefreshSecret,
+  { expiresIn: config.jwtRefreshExpiresIn }
+);
+
+const getTokenExpirationIso = (token) => {
+  const decoded = jwt.decode(token);
+  if (!decoded?.exp) return null;
+  return new Date(decoded.exp * 1000).toISOString();
+};
+
+const createAuthSessionPayload = (user, role) => {
+  const token = createAccessToken(user, role);
+  const refreshToken = createRefreshToken(user, role);
+
+  return {
+    token,
+    refreshToken,
+    expiresAt: getTokenExpirationIso(token),
+    refreshExpiresAt: getTokenExpirationIso(refreshToken)
+  };
+};
+
 export const login = async (req, res) => {
   const { email, password, emailOrUsername } = req.body;
   try {
@@ -166,15 +205,7 @@ export const login = async (req, res) => {
 
     // Los admins y otros roles NO necesitan aprobación ni verificación
     
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: normalizeRole(roleName)
-      },
-      config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
-    );
+    const authSession = createAuthSessionPayload(user, roleName);
 
     user.lastLogin = new Date();
     await user.save();
@@ -202,7 +233,10 @@ export const login = async (req, res) => {
       status: 200,
       message: 'Login exitoso',
       data: {
-        token,
+        token: authSession.token,
+        refreshToken: authSession.refreshToken,
+        expiresAt: authSession.expiresAt,
+        refreshExpiresAt: authSession.refreshExpiresAt,
         user: {
           id: user.id,
           email: user.email,
@@ -223,6 +257,77 @@ export const login = async (req, res) => {
       metadata: { email, error: err.message }
     });
 
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Error en el servidor',
+      details: err.message
+    });
+  }
+};
+
+export const refreshSession = async (req, res) => {
+  try {
+    const incomingRefreshToken = req.body?.refreshToken;
+
+    if (!incomingRefreshToken) {
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'refreshToken es requerido'
+      });
+    }
+
+    let decoded = null;
+    try {
+      decoded = jwt.verify(incomingRefreshToken, config.jwtRefreshSecret);
+    } catch (_error) {
+      return sendError(res, {
+        status: 401,
+        code: ERROR_CODES.AUTH_REQUIRED,
+        message: 'Refresh token invalido o expirado'
+      });
+    }
+
+    if (!decoded?.id || decoded?.type !== 'refresh') {
+      return sendError(res, {
+        status: 401,
+        code: ERROR_CODES.AUTH_REQUIRED,
+        message: 'Refresh token invalido'
+      });
+    }
+
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        code: ERROR_CODES.NOT_FOUND,
+        message: 'Usuario no encontrado'
+      });
+    }
+
+    if (!user.status) {
+      return sendError(res, {
+        status: 423,
+        code: ERROR_CODES.AUTH_ACCOUNT_DISABLED,
+        message: 'Cuenta desactivada'
+      });
+    }
+
+    const roleName = await getUserRoleName(user.id);
+    const authSession = createAuthSessionPayload(user, roleName);
+
+    return sendSuccess(res, {
+      status: 200,
+      message: 'Sesion refrescada exitosamente',
+      data: {
+        token: authSession.token,
+        refreshToken: authSession.refreshToken,
+        expiresAt: authSession.expiresAt,
+        refreshExpiresAt: authSession.refreshExpiresAt
+      }
+    });
+  } catch (err) {
     return sendError(res, {
       status: 500,
       code: ERROR_CODES.INTERNAL_ERROR,

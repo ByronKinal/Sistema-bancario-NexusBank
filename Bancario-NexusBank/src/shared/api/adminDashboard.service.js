@@ -167,5 +167,15 @@ export const adminDashboardService = {
       console.error('Error fetching employees stats:', error);
       throw error;
     }
+  },
+
+  createDepositForAccount: async (payload) => {
+    try {
+      const response = await adminRequest('post', '/employee/deposits', payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating deposit:', error);
+      throw error;
+    }
   }
 };

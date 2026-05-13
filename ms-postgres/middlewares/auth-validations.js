@@ -140,3 +140,10 @@ export const validateResetPassword = [
   strongPasswordValidatorNewPassword,
   handleValidationErrors
 ];
+
+export const validateRefreshToken = [
+  body('refreshToken')
+    .notEmpty()
+    .withMessage('refreshToken es requerido'),
+  handleValidationErrors
+];

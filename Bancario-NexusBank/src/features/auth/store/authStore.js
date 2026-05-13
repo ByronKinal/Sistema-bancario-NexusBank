@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { login as loginRequest } from '../../../shared/api/auth.js';
+import { login as loginRequest, refreshSession as refreshSessionRequest } from '../../../shared/api/auth.js';
 import { axiosAuth } from '../../../shared/api/api.js';
 
 export const useAuthStore = create(
@@ -9,6 +9,7 @@ export const useAuthStore = create(
       lastProfileFetchedAt: null,
       user: null,
       token: null,
+      refreshToken: null,
       expiresAt: null,
       loading: false,
       error: null,
@@ -18,6 +19,7 @@ export const useAuthStore = create(
         set({
           user: null,
           token: null,
+          refreshToken: null,
           expiresAt: null,
           error: null,
           loading: false,
@@ -51,6 +53,7 @@ export const useAuthStore = create(
           set({
             user: payloadData.user || null,
             token: payloadData.token || null,
+            refreshToken: payloadData.refreshToken || null,
             expiresAt: payloadData.expiresAt || null,
             loading: false,
             isAuthenticated: !!payloadData.token,
@@ -62,6 +65,47 @@ export const useAuthStore = create(
           const message = error.response?.data?.message || 'Error de autenticación';
 
           set({
+            error: message,
+            loading: false,
+            isAuthenticated: false,
+          });
+
+          return { success: false, error: message };
+        }
+      },
+
+      refreshSession: async () => {
+        try {
+          const currentRefreshToken = useAuthStore.getState().refreshToken;
+
+          if (!currentRefreshToken) {
+            return { success: false, error: 'No hay refresh token disponible' };
+          }
+
+          const response = await refreshSessionRequest(currentRefreshToken);
+          const payloadData = response.data?.data || {};
+
+          if (!payloadData.token) {
+            return { success: false, error: 'No se recibio un token valido' };
+          }
+
+          set((state) => ({
+            ...state,
+            token: payloadData.token,
+            refreshToken: payloadData.refreshToken || state.refreshToken,
+            expiresAt: payloadData.expiresAt || state.expiresAt,
+            isAuthenticated: true,
+            error: null,
+          }));
+
+          return { success: true, data: payloadData };
+        } catch (error) {
+          const message = error.response?.data?.message || 'Sesion expirada';
+          set({
+            user: null,
+            token: null,
+            refreshToken: null,
+            expiresAt: null,
             error: message,
             loading: false,
             isAuthenticated: false,
@@ -173,6 +217,7 @@ export const useAuthStore = create(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        refreshToken: state.refreshToken,
         expiresAt: state.expiresAt,
         isAuthenticated: state.isAuthenticated,
       }),

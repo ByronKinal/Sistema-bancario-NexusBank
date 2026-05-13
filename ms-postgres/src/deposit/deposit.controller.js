@@ -804,5 +804,175 @@ export const revertDeposit = async (req, res) => {
     }
 };
 
+// Nueva función para que empleados creen depósitos sin afectar cliente
+export const createDepositRequestByEmployee = async (req, res) => {
+    try {
+        const currentUserId = req.user?.id;
+        const userRole = req.user?.role;
+
+        if (!currentUserId) {
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Usuario no autenticado' 
+            });
+        }
+
+        if (!['Employee', 'Admin'].includes(userRole)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Solo empleados y administradores pueden usar este endpoint' 
+            });
+        }
+
+        const { accountNumber, amount, description } = req.body;
+
+        if (!accountNumber || !amount) {
+            return res.status(400).json({
+                success: false,
+                message: 'Número de cuenta y monto son requeridos'
+            });
+        }
+
+        const numericAmount = getNumericAmount(amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Monto inválido'
+            });
+        }
+
+        const targetAccount = await Account.findOne({
+            where: { accountNumber }
+        });
+
+        if (!targetAccount) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cuenta destino no encontrada'
+            });
+        }
+
+        if (!targetAccount.status) {
+            return res.status(400).json({
+                success: false,
+                message: 'La cuenta destino no está activa'
+            });
+        }
+
+        if (['FROZEN', 'SUSPENDED', 'BLOCKED'].includes(targetAccount.accountStatus)) {
+            return res.status(423).json({
+                success: false,
+                message: `La cuenta está ${targetAccount.accountStatus.toLowerCase()} y no puede recibir depósitos`,
+                status: targetAccount.accountStatus
+            });
+        }
+
+        // Los depósitos de empleados van directamente a COMPLETADA sin necesidad de aprobación
+        const dbTransaction = await sequelize.transaction();
+
+        try {
+            const depositRecord = await Deposit.create({
+                accountId: targetAccount.id,
+                type: 'DEPOSITO',
+                amount: numericAmount.toFixed(2),
+                description: description || 'Depósito creado por empleado',
+                balanceAfter: (Number(targetAccount.accountBalance || 0) + numericAmount).toFixed(2),
+                status: 'COMPLETADA', // Directamente completado
+                relatedAccountId: currentUserId,
+                createdBy: currentUserId,
+                approvedBy: currentUserId,
+                approvedAt: new Date()
+            }, { transaction: dbTransaction });
+
+            // Actualizar balance de la cuenta
+            const newBalance = Number(targetAccount.accountBalance || 0) + numericAmount;
+            targetAccount.accountBalance = newBalance.toFixed(2);
+            await targetAccount.save({ transaction: dbTransaction });
+
+            // Crear audit de la transacción
+            await createTransactionAudit({
+                transactionId: depositRecord.id,
+                actorUserId: currentUserId,
+                action: 'DEPOSIT_CREATED_BY_EMPLOYEE',
+                outcome: 'SUCCESS',
+                previousStatus: null,
+                newStatus: 'COMPLETADA',
+                amount: numericAmount,
+                relatedCouponId: null,
+                reason: `Depósito creado por empleado en cuenta ${accountNumber}`,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                metadata: {
+                    previousBalance: targetAccount.accountBalance,
+                    newBalance: newBalance.toFixed(2),
+                    employeeId: currentUserId,
+                    employeeRole: userRole
+                }
+            });
+
+            await dbTransaction.commit();
+
+            // Registrar en auditoría del sistema
+            await recordAuditEvent({
+                req,
+                actorUserId: currentUserId,
+                action: AUDIT_ACTIONS.DEPOSIT_CREATION,
+                resource: AUDIT_RESOURCES.DEPOSIT,
+                result: 'SUCCESS',
+                beforeState: {
+                    balance: targetAccount.accountBalance
+                },
+                afterState: {
+                    balance: newBalance.toFixed(2)
+                },
+                metadata: {
+                    depositId: depositRecord.id,
+                    accountId: targetAccount.id,
+                    accountNumber,
+                    amount: numericAmount.toFixed(2),
+                    createdBy: userRole
+                }
+            });
+
+            // Enviar email al dueño de la cuenta (opcional)
+            const accountOwner = await getUserEmailAndName(targetAccount.userId);
+            if (accountOwner) {
+                await sendEmailSafe(() => sendDepositAlertEmail(accountOwner.email, accountOwner.name, {
+                    amount: numericAmount,
+                    accountNumber: accountNumber,
+                    newBalance: newBalance.toFixed(2),
+                    createdBy: userRole
+                }));
+            }
+
+            return res.status(201).json({
+                success: true,
+                message: 'Depósito creado exitosamente por empleado',
+                data: {
+                    transactionId: depositRecord.id,
+                    accountNumber,
+                    amount: numericAmount.toFixed(2),
+                    newBalance: newBalance.toFixed(2),
+                    status: 'COMPLETADA',
+                    createdAt: depositRecord.createdAt,
+                    createdBy: currentUserId
+                }
+            });
+
+        } catch (error) {
+            await dbTransaction.rollback();
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error creando depósito por empleado:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error en el servidor', 
+            error: error.message 
+        });
+    }
+};
+
 
 
