@@ -18,6 +18,7 @@ import {
   getAccountBlockHistory
 } from './account.controller.js';
 import { AccountRequest } from './accountRequest.model.js';
+import { User, UserProfile } from '../user/user.model.js';
 import { verifyTokenAndGetUser, verifyRoles } from '../../middlewares/role-middleware.js';
 import { validateAccountType } from '../../middlewares/account-validators.js';
 
@@ -32,6 +33,20 @@ router.get('/admin/account-requests', verifyTokenAndGetUser, verifyRoles(['Admin
   try {
     const requests = await AccountRequest.findAll({ 
       where: { status: 'PENDING' }, 
+      include: [
+        {
+          model: User,
+          as: 'User',
+          attributes: ['id', 'email'],
+          include: [
+            {
+              model: UserProfile,
+              as: 'UserProfile',
+              attributes: ['Name', 'Username', 'PhoneNumber', 'DocumentNumber', 'JobName', 'Income']
+            }
+          ]
+        }
+      ],
       order: [['createdAt', 'DESC']] 
     });
     return res.status(200).json({ success: true, data: requests });

@@ -18,8 +18,18 @@ const toLightUser = (userInstance) => {
         profile: {
             name: user.UserProfile?.Name || null,
             username: user.UserProfile?.Username || null,
-            phoneNumber: user.UserProfile?.PhoneNumber || null
-        }
+            phoneNumber: user.UserProfile?.PhoneNumber || null,
+            documentNumber: user.UserProfile?.DocumentNumber || null,
+            jobName: user.UserProfile?.JobName || null,
+            income: user.UserProfile?.Income || 0
+        },
+        accounts: (user.Accounts || []).map(acc => ({
+            id: acc.id,
+            accountNumber: acc.accountNumber,
+            accountType: acc.accountType,
+            accountBalance: acc.accountBalance,
+            accountStatus: acc.accountStatus
+        }))
     };
 };
 
@@ -30,7 +40,7 @@ export const getPaginatedUsersLight = async (rawQuery = {}) => {
         {
             model: UserProfile,
             as: 'UserProfile',
-            attributes: ['Name', 'Username', 'PhoneNumber'],
+            attributes: ['Name', 'Username', 'PhoneNumber', 'DocumentNumber', 'JobName', 'Income'],
             required: false,
             where: Object.keys(filters.profileWhere).length > 0 ? filters.profileWhere : undefined
         },
@@ -47,6 +57,12 @@ export const getPaginatedUsersLight = async (rawQuery = {}) => {
                     where: filters.role ? { name: filters.role } : undefined
                 }
             ]
+        },
+        {
+            model: Account,
+            as: 'Accounts',
+            attributes: ['id', 'accountNumber', 'accountType', 'accountBalance', 'accountStatus'],
+            required: false
         }
     ];
 

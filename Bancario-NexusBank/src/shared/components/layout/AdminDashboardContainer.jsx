@@ -27,10 +27,10 @@ export const AdminDashboardContainer = () => {
 
   const fetchDashboardInfo = async () => {
     try {
-      const { data } = await adminDashboardService.getDashboardInfo();
-      if (data && data.data) {
-        setStats(data.data.stats || { totalUsers: 0, transactionsToday: 0, pendingAccounts: 0 });
-        setMovementsData(data.data.recentTransactions || []);
+      const response = await adminDashboardService.getDashboardInfo();
+      if (response && response.data) {
+        setStats(response.data.stats || { totalUsers: 0, transactionsToday: 0, pendingAccounts: 0 });
+        setMovementsData(response.data.recentTransactions || []);
       }
     } catch (err) {
       console.error('Error fetching dashboard info:', err);
@@ -39,8 +39,8 @@ export const AdminDashboardContainer = () => {
 
   const fetchPromotions = async () => {
     try {
-      const response = await axiosAdmin.get('/catalog/admin/all');
-      const data = response.data;
+      const response = await adminDashboardService.getAdminPromotions();
+      const data = response;
       const promoList = Array.isArray(data.data) ? data.data : (data.promotions || []);
       setPromotions(promoList.slice(0, 3)); // Solo mostramos las 3 primeras en el widget
     } catch (err) {
@@ -50,10 +50,6 @@ export const AdminDashboardContainer = () => {
 
   useEffect(() => {
     fetchDashboardInfo();
-    fetchPromotions();
-  }, []);
-
-  useEffect(() => {
     fetchPromotions();
   }, []);
 
@@ -73,15 +69,21 @@ export const AdminDashboardContainer = () => {
   };
 
   const getAmountColor = (type) => {
-    if (type === 'positive') return '#10b981';
-    if (type === 'negative') return '#ef4444';
+    if (type === 'positive' || type === 'DEPOSITO') return '#10b981';
+    if (type === 'negative' || type === 'RETIRO' || type === 'TRANSFERENCIA_ENVIADA') return '#ef4444';
     return '#fbbf24';
   };
 
-  const getStatusBadge = (amountType) => {
-    if (amountType === 'positive') return { bg: '#d1fae5', color: '#047857', text: 'Ingreso' };
-    if (amountType === 'negative') return { bg: '#fee2e2', color: '#991b1b', text: 'Egreso' };
-    return { bg: '#fef3c7', color: '#92400e', text: 'Pendiente' };
+  const getStatusBadge = (status, type) => {
+    const s = (status || '').toUpperCase();
+    
+    if (s === 'COMPLETADA' || s === 'APROBADA' || s === 'COMPLETED') {
+      return { bg: '#d1fae5', color: '#047857', text: 'Aprobado', className: 'badge-ingreso' };
+    }
+    if (s === 'RECHAZADA' || s === 'FALLIDA' || s === 'REJECTED') {
+      return { bg: '#fee2e2', color: '#991b1b', text: 'Rechazado', className: 'badge-egreso' };
+    }
+    return { bg: '#fef3c7', color: '#92400e', text: 'Pendiente', className: 'badge-pendiente' };
   };
 
   return (
@@ -129,17 +131,20 @@ export const AdminDashboardContainer = () => {
                   <tbody>
                     {currentMovements && currentMovements.length > 0 ? (
                       currentMovements.map((movement) => {
-                        const badge = getStatusBadge(movement.amountType);
+                        const status = movement.status || 'PENDIENTE';
+                        const badge = getStatusBadge(status, movement.type);
+                        const isPositive = movement.type === 'DEPOSITO' || movement.type === 'TRANSFERENCIA_RECIBIDA';
+                        
                         return (
                           <tr key={movement.id}>
                             <td className="font-medium text-xs">{getMovementTypeLabel(movement.type)}</td>
                             <td>{movement.userName}</td>
-                            <td className="date-column">{movement.date}</td>
-                            <td className={`amount-${movement.amountType} whitespace-nowrap`}>
-                              {movement.amount}
+                            <td className="date-column">{new Date(movement.date).toLocaleString()}</td>
+                            <td className={`${isPositive ? 'amount-positive' : 'amount-negative'} whitespace-nowrap`}>
+                              {isPositive ? '+' : '-'} Q {movement.amount}
                             </td>
                             <td>
-                              <span className={`status-badge badge-${movement.amountType === 'positive' ? 'ingreso' : movement.amountType === 'negative' ? 'egreso' : 'pendiente'}`}>
+                              <span className={`status-badge ${badge.className}`}>
                                 {badge.text}
                               </span>
                             </td>
@@ -171,6 +176,16 @@ export const AdminDashboardContainer = () => {
                 >
                   <span className="text-xl mr-2">⏳</span>
                   Ir a Empleados
+                </div>
+
+                {/* Users Button */}
+                <div 
+                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)' }}
+                  onClick={() => navigate('/AdminDashboard/users')}
+                >
+                  <span className="text-xl mr-2">👥</span>
+                  Usuarios
                 </div>
 
                 {/* Pending Accounts Button */}

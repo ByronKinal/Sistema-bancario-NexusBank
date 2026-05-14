@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AdminNavbar from './AdminNavbar.jsx';
 import AdminSidebar from './AdminSidebar.jsx';
 import PromotionFormModal from './PromotionFormModal.jsx';
-import { axiosAdmin } from '../../api/api.js';
+import { adminDashboardService } from '../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../utils/toast.js';
 import '../../../styles/promotions.css';
 
@@ -59,9 +59,8 @@ const PromotionsManagementView = () => {
   const fetchPromotions = async () => {
     try {
       setLoading(true);
-      const response = await axiosAdmin.get('/catalog/admin/all');
-      const data = response.data;
-      const promoList = Array.isArray(data.data) ? data.data : (data.promotions || []);
+      const response = await adminDashboardService.getAdminPromotions();
+      const promoList = Array.isArray(response.data) ? response.data : (response.promotions || []);
       setPromotions(promoList);
     } catch (error) {
       console.error('Error fetching promotions:', error);
@@ -169,17 +168,35 @@ const PromotionsManagementView = () => {
     }
 
     try {
-      await axiosAdmin.put(`/catalog/admin/${promotion._id}/status`, {
-          newStatus: newStatus,
-          reason: `Cambio de estado a ${newStatus} desde administración`
-      });
-
+      await adminDashboardService.putPromotionStatus(promotion.id || promotion._id, newStatus);
       showSuccess(`Promoción ${statusLabels[newStatus].toLowerCase()} exitosamente`);
       fetchPromotions();
     } catch (error) {
       console.error('Error changing promotion status:', error);
       const message = error.response?.data?.message || error.message || 'Error al cambiar estado de promoción';
       showError(message);
+    }
+  };
+
+  const handleStatusToggle = async (promotion) => {
+    const nextStatus = promotion.status === 'ACTIVA' ? 'PAUSADA' : 'ACTIVA';
+    try {
+      await adminDashboardService.updatePromotionStatus(promotion.id || promotion._id, nextStatus);
+      showSuccess(`Promoción ${nextStatus === 'ACTIVA' ? 'activada' : 'pausada'} con éxito`);
+      fetchPromotions();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Error al actualizar estado');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta promoción?')) return;
+    try {
+      await adminDashboardService.deletePromotion(id);
+      showSuccess('Promoción eliminada con éxito');
+      fetchPromotions();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Error al eliminar');
     }
   };
 

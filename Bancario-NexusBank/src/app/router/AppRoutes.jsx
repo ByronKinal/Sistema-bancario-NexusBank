@@ -25,6 +25,7 @@ import AdminEmployeesView from '../../shared/components/layout/AdminEmployeesVie
 import PromotionsManagementView from '../../shared/components/layout/PromotionsManagementView.jsx';
 import GlobalTransactionsView from '../../features/main/admin/GlobalTransactionsView.jsx';
 import RankingView from '../../features/main/admin/RankingView.jsx';
+import AdminUsersListView from '../../shared/components/layout/AdminUsersListView.jsx';
 import AccountRequestsHistoryView from '../../shared/components/layout/AccountRequestsHistoryView.jsx';
 import ClientNotificationsView from '../../shared/components/layout/ClientNotificationsView.jsx';
 
@@ -123,6 +124,15 @@ export const AppRoutes = () => {
                         <AccountRequestsHistoryView />
                     </ProtectedRoute>
                 }
+            />
+            <Route 
+                path="/AdminDashboard/users"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <AdminUsersListView />
+                    </ProtectedRoute>
+                }
+            
             />
 
             {/* ── Empleado ── */}
