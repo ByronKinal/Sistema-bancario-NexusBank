@@ -20,6 +20,9 @@ importers:
       jspdf:
         specifier: ^2.5.2
         version: 2.5.2
+      jspdf-autotable:
+        specifier: ^5.0.7
+        version: 5.0.7(jspdf@2.5.2)
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -930,6 +933,11 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  jspdf-autotable@5.0.7:
+    resolution: {integrity: sha512-2wr7H6liNDBYNwt25hMQwXkEWFOEopgKIvR1Eukuw6Zmprm/ZcnmLTQEjW7Xx3FCbD3v7pflLcnMAv/h1jFDQw==}
+    peerDependencies:
+      jspdf: ^2 || ^3 || ^4
 
   jspdf@2.5.2:
     resolution: {integrity: sha512-myeX9c+p7znDWPk0eTrujCzNjT+CXdXyk7YmJq5nD5V7uLLKmSXnlQ/Jn/kuo3X09Op70Apm0rQSnFWyGK8uEQ==}
@@ -2336,6 +2344,10 @@ snapshots:
   json-stable-stringify-without-jsonify@1.0.1: {}
 
   json5@2.2.3: {}
+
+  jspdf-autotable@5.0.7(jspdf@2.5.2):
+    dependencies:
+      jspdf: 2.5.2
 
   jspdf@2.5.2:
     dependencies:

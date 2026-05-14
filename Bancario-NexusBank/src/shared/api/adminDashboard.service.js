@@ -58,6 +58,26 @@ export const adminDashboardService = {
     }
   },
 
+  getGlobalTransactions: async (params = {}) => {
+    try {
+      const response = await adminRequest('get', '/admin/transactions', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching global transactions:', error);
+      throw error;
+    }
+  },
+
+  getTransactionRanking: async (params = {}) => {
+    try {
+      const response = await adminRequest('get', '/dashboard/transaction-ranking', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching transaction ranking:', error);
+      throw error;
+    }
+  },
+
   getAccounts: async () => {
     try {
       // Usamos el endpoint global de accounts, que para los administradores retorna todas las cuentas.

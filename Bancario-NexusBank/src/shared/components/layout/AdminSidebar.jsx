@@ -36,7 +36,18 @@ const AdminSidebar = () => {
 
         <div style={{marginTop:16}}>
           <div style={sectionTitle}>OPERACIONES</div>
-          <div style={{...item}}>Transacciones</div>
+          <div 
+            style={{...item, background: location.pathname === '/AdminDashboard/global-transactions' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/global-transactions' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/global-transactions' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/global-transactions')}
+          >
+            Transacciones globales
+          </div>
+          <div 
+            style={{...item, background: location.pathname === '/AdminDashboard/ranking' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/ranking' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/ranking' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/ranking')}
+          >
+            Ranking de usuarios
+          </div>
           <div 
             style={{...item, background: location.pathname === '/AdminDashboard/promotions' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/promotions' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/promotions' ? 700 : 400}}
             onClick={() => navigate('/AdminDashboard/promotions')}

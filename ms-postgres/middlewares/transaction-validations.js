@@ -17,7 +17,7 @@ const ALLOWED_TRANSACTION_STATUS = [
 
 const ALLOWED_CLIENT_QUERY_KEYS = ['type', 'status', 'page', 'limit'];
 const ALLOWED_EMPLOYEE_QUERY_KEYS = ['type', 'status', 'page', 'limit'];
-const ALLOWED_ADMIN_QUERY_KEYS = ['accountId', 'userId', 'type', 'status', 'startDate', 'endDate', 'page', 'limit'];
+const ALLOWED_ADMIN_QUERY_KEYS = ['accountId', 'userId', 'type', 'status', 'startDate', 'endDate', 'page', 'limit', 'search'];
 
 const ACCOUNT_ID_PATTERN = /^acc_[123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz]{12}$/;
 const USER_ID_PATTERN = /^usr_[123456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz]{12}$/;

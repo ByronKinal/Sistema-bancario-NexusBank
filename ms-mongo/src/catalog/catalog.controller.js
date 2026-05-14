@@ -201,6 +201,61 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
   }
 };
 
+export const getActiveAutomaticPromotion = async (req, res) => {
+  try {
+    const { operationType } = req.params;
+    
+    const operationToPromoTypeMap = {
+      'APERTURA_CUENTA': 'APERTURA_CUENTA_BONUS',
+      'PRIMER_DEPOSITO': 'PRIMER_DEPOSITO_BONUS',
+      'TRANSFERENCIA_RECIBIDA': 'TRANSFERENCIA_RECIBIDA_BONUS'
+    };
+
+    const expectedPromoType = operationToPromoTypeMap[operationType];
+
+    if (!expectedPromoType) {
+      return res.status(400).json({ success: false, message: 'Tipo de operación no válido' });
+    }
+
+    const today = new Date();
+    
+    // Find the first active promotion of this type that hasn't expired
+    const promotion = await Catalog.findOne({
+      promotionType: expectedPromoType,
+      status: 'ACTIVA',
+      $and: [
+        { $or: [{ startDate: null }, { startDate: { $lte: today } }] },
+        { $or: [{ endDate: null }, { endDate: { $gte: today } }] }
+      ],
+      $expr: {
+        $or: [
+          { $eq: ["$maxUsesTotalPromotion", null] },
+          { $lt: ["$usesCountTotal", "$maxUsesTotalPromotion"] }
+        ]
+      }
+    });
+
+    if (!promotion) {
+      return res.status(404).json({ success: false, message: 'No hay promoción automática activa' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      promotion: {
+        id: promotion._id,
+        name: promotion.name,
+        promotionType: promotion.promotionType,
+        cashbackAmount: promotion.cashbackAmount,
+        cashbackPercentage: promotion.cashbackPercentage
+      }
+    });
+
+  } catch (error) {
+    console.error('Error buscando promoción automática:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const incrementPromotionUsage = async (couponId, dbTransaction = null) => {
   try {
     await Catalog.findByIdAndUpdate(

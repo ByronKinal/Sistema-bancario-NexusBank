@@ -213,12 +213,14 @@ export const createAccount = async (req, res) => {
 
         let initialBalance = 0;
         let appliedCouponAmount = 0;
+        let finalCouponId = couponId;
 
-        if (couponId) {
+        const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+
+        if (finalCouponId) {
             try {
-                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
                 const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
-                    couponId: couponId,
+                    couponId: finalCouponId,
                     operationType: 'APERTURA_CUENTA',
                     amount: 0
                 });
@@ -232,6 +234,28 @@ export const createAccount = async (req, res) => {
                 }
             } catch (err) {
                 console.error('Error validating coupon for account opening:', err.message);
+            }
+        } else {
+            // Buscar si hay un bono automático activo para apertura de cuenta
+            try {
+                const bonusRes = await axios.get(`${mongoApiUrl}/catalog/internal/active-promotion/APERTURA_CUENTA`);
+                if (bonusRes.data && bonusRes.data.success && bonusRes.data.promotion) {
+                    const promotion = bonusRes.data.promotion;
+                    if (promotion.cashbackAmount) {
+                        initialBalance = promotion.cashbackAmount;
+                        appliedCouponAmount = promotion.cashbackAmount;
+                        finalCouponId = promotion.id;
+                        
+                        // Increment promotion usage
+                        axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                            couponId: finalCouponId,
+                            operationType: 'APERTURA_CUENTA',
+                            amount: 0
+                        }).catch(e => console.error('Error incrementando uso del bono:', e.message));
+                    }
+                }
+            } catch (err) {
+                console.error('No se pudo aplicar el bono automático:', err.response?.data || err.message);
             }
         }
 
@@ -264,7 +288,7 @@ export const createAccount = async (req, res) => {
                 description: 'Bono por apertura de cuenta',
                 balanceAfter: initialBalance.toFixed(2),
                 status: 'COMPLETADA',
-                appliedCouponId: couponId
+                appliedCouponId: finalCouponId
             });
         }
 
@@ -505,6 +529,46 @@ export const enableRequestedAccount = async (req, res) => {
             lastAdminChangeType: 'REQUEST_ENABLE',
             lastAdminChangeReason: reason || 'Habilitacion de cuenta solicitada sin token'
         });
+
+        // Aplicar bono automático de apertura de cuenta si existe
+        let appliedBonusAmount = 0;
+        let appliedCouponId = null;
+        try {
+            const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+            const bonusRes = await axios.get(`${mongoApiUrl}/catalog/internal/active-promotion/APERTURA_CUENTA`);
+            
+            if (bonusRes.data && bonusRes.data.success && bonusRes.data.promotion) {
+                const promotion = bonusRes.data.promotion;
+                appliedBonusAmount = promotion.cashbackAmount || 0;
+                appliedCouponId = promotion.id;
+
+                if (appliedBonusAmount > 0) {
+                    await account.update({
+                        accountBalance: parseFloat(account.accountBalance || 0) + appliedBonusAmount
+                    });
+
+                    const Transaction = (await import('../transaction/transaction.model.js')).Transaction;
+                    await Transaction.create({
+                        accountId: account.id,
+                        type: 'DEPOSITO',
+                        amount: appliedBonusAmount.toFixed(2),
+                        description: `Bono de bienvenida: ${promotion.name}`,
+                        balanceAfter: account.accountBalance,
+                        status: 'COMPLETADA',
+                        appliedCouponId: appliedCouponId
+                    });
+                    
+                    // Increment promotion usage
+                    axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                        couponId: appliedCouponId,
+                        operationType: 'APERTURA_CUENTA',
+                        amount: 0
+                    }).catch(e => console.error('Error incrementando uso del bono:', e.message));
+                }
+            }
+        } catch (err) {
+            console.error('No se pudo aplicar el bono automático de apertura:', err.response?.data || err.message);
+        }
 
         // Generar token de verificación y marcar como aprobado
         const user = await User.findByPk(account.userId);

@@ -1049,7 +1049,8 @@ export const getAdminTransactions = async (req, res) => {
             startDate,
             endDate,
             page = 1,
-            limit = 20
+            limit = 20,
+            search
         } = req.query;
 
         const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -1100,19 +1101,46 @@ export const getAdminTransactions = async (req, res) => {
 
         let targetAccountIds = null;
 
-        if (userId) {
-            const accountsByUser = await Account.findAll({
-                where: { userId: String(userId).trim() },
-                attributes: ['id'],
+        if (search) {
+            const searchPattern = `%${String(search).trim()}%`;
+            
+            // Paso 1: Buscar los usuarios que coinciden con el nombre o username
+            const matchingUsers = await UserProfile.findAll({
+                where: {
+                    [Op.or]: [
+                        { Name: { [Op.iLike]: searchPattern } },
+                        { Username: { [Op.iLike]: searchPattern } }
+                    ]
+                },
+                attributes: ['UserId'],
                 raw: true
             });
 
-            targetAccountIds = accountsByUser.map((account) => account.id);
+            const matchedUserIds = matchingUsers.map(u => u.UserId);
+
+            // Paso 2: Buscar las cuentas, ya sea que coincida su número o que su dueño sea uno de los usuarios encontrados
+            const accountWhereClause = {
+                [Op.or]: [
+                    { accountNumber: { [Op.iLike]: searchPattern } }
+                ]
+            };
+
+            if (matchedUserIds.length > 0) {
+                accountWhereClause[Op.or].push({ userId: { [Op.in]: matchedUserIds } });
+            }
+
+            const matchingAccounts = await Account.findAll({
+                attributes: ['id'],
+                where: accountWhereClause,
+                raw: true
+            });
+            
+            targetAccountIds = matchingAccounts.map(acc => acc.id);
 
             if (targetAccountIds.length === 0) {
                 return res.status(200).json({
                     success: true,
-                    message: 'No se encontraron cuentas para el usuario indicado',
+                    message: 'No se encontraron resultados para la búsqueda',
                     data: [],
                     pagination: {
                         page: parsedPage,
@@ -1122,11 +1150,44 @@ export const getAdminTransactions = async (req, res) => {
                     }
                 });
             }
+        }
 
+        if (userId) {
+            const accountsByUser = await Account.findAll({
+                where: { userId: String(userId).trim() },
+                attributes: ['id'],
+                raw: true
+            });
+
+            const userAccountIds = accountsByUser.map((account) => account.id);
+
+            if (targetAccountIds !== null) {
+                // Intersect search results with userId results
+                targetAccountIds = targetAccountIds.filter(id => userAccountIds.includes(id));
+            } else {
+                targetAccountIds = userAccountIds;
+            }
+
+            if (targetAccountIds.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    message: 'No se encontraron cuentas para el usuario indicado o la búsqueda combinada',
+                    data: [],
+                    pagination: {
+                        page: parsedPage,
+                        limit: parsedLimit,
+                        totalRecords: 0,
+                        totalPages: 0
+                    }
+                });
+            }
+        }
+
+        if (targetAccountIds !== null) {
             if (transactionWhere.accountId && !targetAccountIds.includes(transactionWhere.accountId)) {
                 return res.status(200).json({
                     success: true,
-                    message: 'La cuenta no pertenece al usuario indicado',
+                    message: 'La cuenta no pertenece a la búsqueda o usuario indicado',
                     data: [],
                     pagination: {
                         page: parsedPage,
@@ -1359,10 +1420,11 @@ export const getDashboardTransactionRanking = async (req, res) => {
             });
         }
 
-        const { type, order = 'DESC', limit = 20 } = req.query;
+        const { type, order = 'DESC', limit = 20, orderBy = 'MOVEMENTS' } = req.query;
 
         const limitNumber = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
         const validOrder = ['ASC', 'DESC'].includes(order?.toUpperCase()) ? order.toUpperCase() : 'DESC';
+        const validOrderBy = ['MOVEMENTS', 'BALANCE'].includes(orderBy?.toUpperCase()) ? orderBy.toUpperCase() : 'MOVEMENTS';
 
         const validTypes = ['DEPOSITO', 'RETIRO', 'TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA', 'COMPRA'];
 
@@ -1433,10 +1495,19 @@ export const getDashboardTransactionRanking = async (req, res) => {
         }));
 
         ranking.sort((a, b) => {
-            if (validOrder === 'DESC') {
-                return b.totalMovements - a.totalMovements;
+            let valA, valB;
+            if (validOrderBy === 'BALANCE') {
+                valA = parseFloat(a.accountbalance) || 0;
+                valB = parseFloat(b.accountbalance) || 0;
             } else {
-                return a.totalMovements - b.totalMovements;
+                valA = a.totalMovements;
+                valB = b.totalMovements;
+            }
+
+            if (validOrder === 'DESC') {
+                return valB - valA;
+            } else {
+                return valA - valB;
             }
         });
 

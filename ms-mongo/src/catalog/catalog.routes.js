@@ -10,7 +10,9 @@ import {
   updatePromotionStatus,
   getPromotionAudit,
   getAllAudit,
-  deletePromotion
+  deletePromotion,
+  getActiveAutomaticPromotion,
+  validateAndApplyCoupon
 } from './catalog.controller.js';
 import {
   validateCreatePromotion,
@@ -20,10 +22,9 @@ import {
 } from '../../middlewares/promotion-validators.js';
 import { verifyTokenAndGetUser, verifyRoles } from '../../middlewares/role-middleware.js';
 
-// Controller for internal service validation
-import { validateAndApplyCoupon } from './catalog.controller.js';
-
 const router = express.Router();
+
+router.get('/internal/active-promotion/:operationType', getActiveAutomaticPromotion);
 
 router.post('/internal/validate-coupon', async (req, res) => {
   try {

@@ -23,6 +23,8 @@ import EmployeDashnoardContainer from '../../shared/components/layout/EmployeDas
 import EmployeeProfileSettingsView from '../../shared/components/layout/EmployeeProfileSettingsView.jsx';
 import AdminEmployeesView from '../../shared/components/layout/AdminEmployeesView.jsx';
 import PromotionsManagementView from '../../shared/components/layout/PromotionsManagementView.jsx';
+import GlobalTransactionsView from '../../features/main/admin/GlobalTransactionsView.jsx';
+import RankingView from '../../features/main/admin/RankingView.jsx';
 import AccountRequestsHistoryView from '../../shared/components/layout/AccountRequestsHistoryView.jsx';
 import ClientNotificationsView from '../../shared/components/layout/ClientNotificationsView.jsx';
 
@@ -79,6 +81,22 @@ export const AppRoutes = () => {
                 element={
                     <ProtectedRoute requiredRole="Admin">
                         <AdminEmployeesView />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/AdminDashboard/global-transactions"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <GlobalTransactionsView />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/AdminDashboard/ranking"
+                element={
+                    <ProtectedRoute requiredRole="Admin">
+                        <RankingView />
                     </ProtectedRoute>
                 }
             />
