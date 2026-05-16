@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import AdminNavbar from './AdminNavbar.jsx';
 import AdminSidebar from './AdminSidebar.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError } from '../../../utils/toast.js';
+import '../../../../styles/adminDashboard.css';
 
 const AccountRequestsHistoryView = () => {
   const [requests, setRequests] = useState([]);

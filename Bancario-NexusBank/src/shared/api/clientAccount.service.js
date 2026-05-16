@@ -26,12 +26,35 @@ const getFromBankingApi = (url, options = {}) => {
   });
 };
 
+const getAccountSortTimestamp = (account) => {
+  const value = account?.openedAt || account?.createdAt || account?.updatedAt || 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const sortAccountsForDisplay = (accounts = []) => {
+  return [...accounts].sort((left, right) => {
+    const leftStatus = String(left?.accountStatus || '').toUpperCase();
+    const rightStatus = String(right?.accountStatus || '').toUpperCase();
+
+    if (leftStatus === 'ACTIVE' && rightStatus !== 'ACTIVE') return -1;
+    if (rightStatus === 'ACTIVE' && leftStatus !== 'ACTIVE') return 1;
+
+    const leftTime = getAccountSortTimestamp(left);
+    const rightTime = getAccountSortTimestamp(right);
+
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    return String(left?.accountNumber || '').localeCompare(String(right?.accountNumber || ''));
+  });
+};
+
 export const clientAccountService = {
   // Obtener datos de la cuenta principal del cliente
   getMainAccount: async () => {
     try {
       const response = await getFromBankingApi('/accounts');
-      const accounts = response.data?.data || [];
+      const accounts = sortAccountsForDisplay(response.data?.data || []);
       return accounts.length > 0 ? accounts[0] : null;
     } catch (error) {
       console.error('Error fetching main account:', error);
@@ -43,7 +66,7 @@ export const clientAccountService = {
   getAllAccounts: async () => {
     try {
       const response = await getFromBankingApi('/accounts');
-      return response.data?.data || [];
+      return sortAccountsForDisplay(response.data?.data || []);
     } catch (error) {
       console.error('Error fetching accounts:', error);
       throw error;

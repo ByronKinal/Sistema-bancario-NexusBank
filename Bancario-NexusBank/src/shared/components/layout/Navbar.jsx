@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../features/auth/store/authStore.js';
-import ClientNotifications from './ClientNotifications.jsx';
+import ClientNotifications from './client/ClientNotifications.jsx';
 
 // Construye la URL de la foto limpia (sin duplicar ?t=)
 const buildPhotoSrc = (url) => {

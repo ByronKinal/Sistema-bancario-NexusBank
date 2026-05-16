@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { axiosAdmin } from '../../api/api.js';
-import { showError, showSuccess } from '../../utils/toast.js';
+import { axiosAdmin } from '../../../api/api.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
 
 const AdminAddUserModal = ({ onClose, onSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);

@@ -64,12 +64,12 @@ export const ForgotPasswordPage = () => {
   };
 
   return (
-    <AuthContainer>
+    <AuthContainer mode="forgot">
       <AuthCard
         logoSrc="/src/assets/img/Logo.jpg"
         logoAlt="NexusBank"
         title={emailSent ? 'Correo enviado' : 'Recuperar contraseña'}
-        subtitle={emailSent ? 'Revisa tu bandeja y abre el enlace para crear tu nueva contraseña' : 'Ingresa tu correo para recibir instrucciones'}
+        subtitle={emailSent ? 'Revisa tu bandeja y abre el enlace para crear tu nueva contraseña' : 'Ingresa tu correo para recibir un enlace seguro de restablecimiento'}
       >
         {emailSent ? (
           <div className="auth-sent-state">

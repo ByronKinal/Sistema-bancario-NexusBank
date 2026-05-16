@@ -3,7 +3,7 @@ import { adminDashboardService } from '../../../shared/api/adminDashboard.servic
 import { Card } from '@material-tailwind/react';
 import { FaSearch, FaFilter, FaDownload, FaChevronLeft, FaChevronRight, FaFilePdf } from 'react-icons/fa';
 import TransactionDetailModal from './TransactionDetailModal.jsx';
-import AdminLayout from '../../../shared/components/layout/AdminLayout.jsx';
+import AdminLayout from '../../../shared/components/layout/admin/AdminLayout.jsx';
 import '../../../styles/accountHistory.css';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

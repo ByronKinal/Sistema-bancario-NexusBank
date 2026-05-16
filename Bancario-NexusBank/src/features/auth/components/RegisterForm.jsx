@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { axiosAuth } from '../../../shared/api/api.js';
+import { AuthContainer, AuthCard } from '../../../shared/components/auth/index.js';
 import '../../../styles/registerForm.css';
 
 export default function RegisterForm() {
@@ -76,35 +77,11 @@ export default function RegisterForm() {
   };
 
   return (
-    <div className="register-container">
-      <div className="register-wrapper">
-        {/* Left Side - Marketing */}
-        <div className="register-marketing">
-          <div className="nexus-logo">NB</div>
-          <h1 className="marketing-title">
-            Bienvenido a <span className="highlight">NexusBank</span>
-          </h1>
-          <p className="marketing-description">
-            Tu solución bancaria digital confiable y segura para gestionar todas tus finanzas.
-          </p>
-          <ul className="marketing-features">
-            <li>Transacciones seguras y rápidas</li>
-            <li>Transferencias internacionales</li>
-            <li>Gestión de múltiples cuentas</li>
-            <li>Soporte 24/7</li>
-            <li>Aplicación móvil disponible</li>
-            <li>Tasas competitivas</li>
-          </ul>
-          <div className="marketing-footer">
-            © 2024 NexusBank. Todos los derechos reservados.
-          </div>
-        </div>
+    <AuthContainer mode="register">
+      <AuthCard title="Únete a NexusBank" subtitle="Completa el formulario para crear tu cuenta">
 
-        {/* Right Side - Form */}
         <div className="register-form-wrapper">
           <span className="register-badge">CREAR CUENTA</span>
-          <h2 className="register-title">Únete a NexusBank</h2>
-          <p className="register-subtitle">Completa el formulario para crear tu cuenta</p>
 
           <form onSubmit={handleSubmit(onSubmit)} className={isLoading ? 'form-loading' : ''}>
             {/* Nombre y Username */}
@@ -343,7 +320,7 @@ export default function RegisterForm() {
             ¿Necesitas ayuda? <a href="#support">Contacta al soporte</a>
           </div>
         </div>
-      </div>
-    </div>
+      </AuthCard>
+    </AuthContainer>
   );
 }

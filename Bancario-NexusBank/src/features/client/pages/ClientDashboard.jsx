@@ -210,6 +210,7 @@ export const ClientDashboard = () => {
               { label: 'Historial', icon: '📋', color: 'from-teal-400 to-teal-600' },
               { label: 'Depositar', icon: '💰', color: 'from-indigo-400 to-indigo-600' },
               { label: 'Transferir', icon: '💸', color: 'from-blue-400 to-blue-600' },
+              { label: 'Reversiones', icon: '↩️', color: 'from-amber-400 to-amber-600' },
               { label: 'Favoritos', icon: '⭐', color: 'from-teal-400 to-teal-600' },
               { label: 'Promociones', icon: '📣', color: 'from-teal-400 to-teal-600' },
             ].map((action) => (
@@ -221,6 +222,7 @@ export const ClientDashboard = () => {
                   if (action.label === 'Historial') return navigate('/clientdashboard/account-history');
                   if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
                   if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
+                  if (action.label === 'Reversiones') return navigate('/clientdashboard/reversions');
                   if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
                   if (action.label === 'Promociones') return navigate('/clientdashboard/promotions');
                 }}

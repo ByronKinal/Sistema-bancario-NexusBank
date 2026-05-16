@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './AdminLayout.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { axiosAdmin } from '../../api/api.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { axiosAdmin } from '../../../api/api.js';
+import '../../../../styles/adminDashboard.css';
 
 // Componente Card reutilizable
 const StatCard = ({ title, value, subtitle, color = '' }) => (

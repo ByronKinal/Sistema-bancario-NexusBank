@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../../features/auth/store/authStore.js';
-import Logo from '../../../assets/img/Logo.jpg';
+import { useAuthStore } from '../../../../features/auth/store/authStore.js';
+import Logo from '../../../../assets/img/Logo.jpg';
 import AdminNotifications from './AdminNotifications.jsx';
-import '../../../styles/AdminNavbar.css';
+import '../../../../styles/AdminNavbar.css';
 
 const buildAvatarSrc = (url) => {
 	if (!url) return null;

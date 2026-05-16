@@ -2,28 +2,24 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import AdminLayout from './AdminLayout.jsx';
-import AdminPageHeader from './AdminPageHeader.jsx';
-import { adminProfileService } from '../../api/adminProfile.service.js';
-import { useAuthStore } from '../../../features/auth/store/authStore.js';
-import { showError, showSuccess } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import EmployeeLayout from './EmployeeLayout.jsx';
+import EmployeePageHeader from './EmployeePageHeader.jsx';
+import { adminProfileService } from '../../../api/adminProfile.service.js';
+import { useAuthStore } from '../../../../features/auth/store/authStore.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
+import '../../../../styles/adminDashboard.css';
 
 const profilePhotoBaseURL = import.meta.env.VITE_BANKING_API_URL || import.meta.env.VITE_AUTH_URL || 'http://localhost:3007/api/v1';
 
 const axiosProfilePhoto = axios.create({
 	baseURL: profilePhotoBaseURL,
 	timeout: 10000,
-	headers: {
-		'Content-Type': 'application/json',
-	},
+	headers: { 'Content-Type': 'application/json' },
 });
 
 axiosProfilePhoto.interceptors.request.use((config) => {
 	const token = useAuthStore.getState().token;
-	if (token) {
-		config.headers.Authorization = `Bearer ${token}`;
-	}
+	if (token) config.headers.Authorization = `Bearer ${token}`;
 	return config;
 });
 
@@ -88,7 +84,7 @@ const secondaryButtonStyle = {
 	fontWeight: 700,
 };
 
-export const AdminProfileSettingsView = () => {
+const EmployeeProfileSettingsView = () => {
 	const navigate = useNavigate();
 	const user = useAuthStore((state) => state.user);
 	const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
@@ -123,12 +119,10 @@ export const AdminProfileSettingsView = () => {
 		return profile.Username || currentUser.username || user?.username || 'Usuario';
 	}, [currentUser.username, profile.Username, user?.username]);
 
-	const roleLabel = roleLabelMap[user?.role] || user?.role || 'Administrador';
-	const isAdmin = user?.role === 'Admin' || user?.role === 'Administrador';
+	const roleLabel = roleLabelMap[user?.role] || user?.role || 'Empleado';
 
 	useEffect(() => {
 		let active = true;
-
 		const loadProfile = async () => {
 			try {
 				setLoading(true);
@@ -154,43 +148,26 @@ export const AdminProfileSettingsView = () => {
 				if (active) setLoading(false);
 			}
 		};
-
 		loadProfile();
-
-		return () => {
-			active = false;
-		};
+		return () => { active = false; };
 	}, [reset]);
 
 	const handlePhotoUpload = async (file) => {
 		if (!file) return;
-
 		try {
 			setUploadingPhoto(true);
 			const formData = new FormData();
 			formData.append('photo', file);
-
 			const response = await axiosProfilePhoto.post('/auth/profile/photo', formData, {
-				headers: {
-					'Content-Type': 'multipart/form-data',
-				},
+				headers: { 'Content-Type': 'multipart/form-data' },
 			});
-
-			// add cache-busting query param so browser fetches the new file
 			const returnedUrl = response.data.data.photoUrl || '';
 			const cacheBusted = returnedUrl.includes('?') ? `${returnedUrl}&t=${Date.now()}` : `${returnedUrl}?t=${Date.now()}`;
 			setProfileData(prev => ({
 				...prev,
 				profile: { ...prev.profile, ProfilePhotoUrl: cacheBusted }
 			}));
-
-			// Refresh global user profile so navbar and other components update
-			try {
-				await refreshUserProfile();
-			} catch (e) {
-				// ignore refresh errors here; UI already updated locally
-			}
-
+			try { await refreshUserProfile(); } catch (e) { /* ignore */ }
 			showSuccess('Foto de perfil actualizada correctamente');
 		} catch (error) {
 			showError(error.response?.data?.msg || error.message || 'Error al subir la foto de perfil');
@@ -202,28 +179,20 @@ export const AdminProfileSettingsView = () => {
 	const handleDrag = (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		if (e.type === "dragenter" || e.type === "dragover") {
-			setDragActive(true);
-		} else if (e.type === "dragleave") {
-			setDragActive(false);
-		}
+		if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+		else if (e.type === 'dragleave') setDragActive(false);
 	};
 
 	const handleDrop = (e) => {
 		e.preventDefault();
 		e.stopPropagation();
 		setDragActive(false);
-
 		const files = e.dataTransfer.files;
-		if (files && files[0]) {
-			handlePhotoUpload(files[0]);
-		}
+		if (files && files[0]) handlePhotoUpload(files[0]);
 	};
 
 	const handleFileInputChange = (e) => {
-		if (e.target.files && e.target.files[0]) {
-			handlePhotoUpload(e.target.files[0]);
-		}
+		if (e.target.files && e.target.files[0]) handlePhotoUpload(e.target.files[0]);
 	};
 
 	const onSubmit = async (data) => {
@@ -235,15 +204,11 @@ export const AdminProfileSettingsView = () => {
 				address: data.address,
 				jobName: data.jobName,
 				income: data.income === '' ? undefined : Number(data.income),
-				// Incluir la foto actual si existe para asegurar que se persiste
 				profilePhotoUrl: profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
 			});
-
-			// Preservar la foto en el store
 			updateUserProfile({
 				profilePhotoUrl: response?.data?.profile?.ProfilePhotoUrl || profile?.ProfilePhotoUrl || user?.profilePhotoUrl,
 			});
-
 			await refreshUserProfile();
 			showSuccess('Perfil actualizado correctamente');
 		} catch (error) {
@@ -265,35 +230,36 @@ export const AdminProfileSettingsView = () => {
 	};
 
 	return (
-		<AdminLayout>
+		<EmployeeLayout>
 			<div className="admin-section" style={{ gap: 20 }}>
-				<AdminPageHeader
+				<EmployeePageHeader
 					title="Ajustes de Perfil"
 					breadcrumbs={[
-						{ label: 'Inicio', to: '/AdminDashboard' },
-						{ label: 'Ajustes', to: '/AdminDashboard/profile-settings' },
+						{ label: 'Inicio', to: '/EmployeeDashboard' },
+						{ label: 'Ajustes', to: '/EmployeeDashboard/profile-settings' },
 						{ label: 'Perfil' },
 					]}
-					description="Actualiza tu información personal sin cambiar la identidad visual del sistema."
+					description="Actualiza tu información personal."
 				/>
 
 				<div className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6 items-start">
 					{/* Tarjeta de Perfil */}
 					<div style={cardStyle} className="p-6 lg:p-7">
 						<div className="flex flex-col items-center text-center gap-4">
-							{/* Foto de Perfil */}
+							{/* Foto de Perfil con drag & drop */}
 							<div className="relative group">
 								<div
 									className="w-28 h-28 rounded-full border-4 border-[#C8A84B] bg-gradient-to-br from-[#102b55] to-[#163c78] flex items-center justify-center shadow-xl overflow-hidden cursor-pointer relative"
-									style={{ 
+									style={{
 										backgroundColor: dragActive ? 'rgba(200, 168, 75, 0.1)' : undefined,
 										borderColor: dragActive ? '#d7bb70' : '#C8A84B',
 										transition: 'all 0.3s ease'
 									}}
-									onDragEnter={isAdmin ? handleDrag : undefined}
-									onDragLeave={isAdmin ? handleDrag : undefined}
-									onDragOver={isAdmin ? handleDrag : undefined}
-									onDrop={isAdmin ? handleDrop : undefined}
+									onDragEnter={handleDrag}
+									onDragLeave={handleDrag}
+									onDragOver={handleDrag}
+									onDrop={handleDrop}
+									onClick={() => fileInputRef.current?.click()}
 								>
 									{profile?.ProfilePhotoUrl ? (
 										<img
@@ -304,17 +270,9 @@ export const AdminProfileSettingsView = () => {
 												if (!url) return '';
 												if (url.startsWith('http')) return url;
 												const authUrl = import.meta.env.VITE_AUTH_URL || 'http://localhost:3007/api/v1';
-												// derive origin without /api/v1 so static /uploads is served at root
 												const authOrigin = authUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
-												// If the stored path already points to /uploads (public static), serve from origin
-												if (url.startsWith('/uploads')) {
-													return `${authOrigin}${url}`;
-												}
-												// If path accidentally contains /api/v1/uploads, remove the prefix
-												if (url.startsWith('/api/v1/uploads')) {
-													return `${authOrigin}${url.replace(/^\/api\/v1/, '')}`;
-												}
-												// otherwise, join with origin
+												if (url.startsWith('/uploads')) return `${authOrigin}${url}`;
+												if (url.startsWith('/api/v1/uploads')) return `${authOrigin}${url.replace(/^\/api\/v1/, '')}`;
 												return `${authOrigin}/${url.replace(/^\//, '')}`;
 											})()}
 										/>
@@ -324,24 +282,20 @@ export const AdminProfileSettingsView = () => {
 											<circle cx="12" cy="7" r="4"></circle>
 										</svg>
 									)}
-									
-									{/* Overlay de Hover */}
-									{isAdmin && (
-										<div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-											<span className="text-white text-xs font-bold">Cambiar foto</span>
-										</div>
-									)}
+
+									{/* Overlay hover */}
+									<div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+										<span className="text-white text-xs font-bold">Cambiar foto</span>
+									</div>
 								</div>
 
-								{/* Botón Edit */}
-								{isAdmin && (
-									<div 
-										className="absolute -right-1 bottom-2 w-9 h-9 rounded-full border-2 border-[#0f2344] bg-[#C8A84B] flex items-center justify-center text-[#102b55] shadow-lg cursor-pointer hover:brightness-110 transition"
-										onClick={() => fileInputRef.current?.click()}
-									>
-										<span className="text-sm font-black">✎</span>
-									</div>
-								)}
+								{/* Botón editar foto */}
+								<div
+									className="absolute -right-1 bottom-2 w-9 h-9 rounded-full border-2 border-[#0f2344] bg-[#C8A84B] flex items-center justify-center text-[#102b55] shadow-lg cursor-pointer hover:brightness-110 transition"
+									onClick={() => fileInputRef.current?.click()}
+								>
+									<span className="text-sm font-black">✎</span>
+								</div>
 
 								<input
 									type="file"
@@ -399,7 +353,7 @@ export const AdminProfileSettingsView = () => {
 								<h3 className="text-2xl font-bold text-white">Información Personal</h3>
 								<div className="mt-2 h-px w-24 bg-[#C8A84B]" />
 							</div>
-							<div className="text-sm text-slate-300 font-medium">Mantén tu perfil actualizado para el equipo de administración.</div>
+							<div className="text-sm text-slate-300 font-medium">Mantén tu perfil actualizado.</div>
 						</div>
 
 						{loading ? (
@@ -453,7 +407,7 @@ export const AdminProfileSettingsView = () => {
 									<button type="submit" style={accentButtonStyle} disabled={saving} className={saving ? 'opacity-70 cursor-not-allowed' : 'hover:brightness-105 transition'}>
 										{saving ? 'Guardando...' : 'Guardar cambios'}
 									</button>
-									<button type="button" style={secondaryButtonStyle} onClick={() => navigate('/AdminDashboard')}>
+									<button type="button" style={secondaryButtonStyle} onClick={() => navigate('/EmployeeDashboard')}>
 										Cancelar
 									</button>
 								</div>
@@ -462,8 +416,8 @@ export const AdminProfileSettingsView = () => {
 					</div>
 				</div>
 			</div>
-		</AdminLayout>
+		</EmployeeLayout>
 	);
 };
 
-export default AdminProfileSettingsView;
+export default EmployeeProfileSettingsView;

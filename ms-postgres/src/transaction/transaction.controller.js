@@ -27,6 +27,43 @@ const getNumericAmount = (value) => {
     return Number.isFinite(amount) ? amount : NaN;
 };
 
+const getAccountBlockedResponse = (account, role = 'cuenta') => {
+    const accountStatus = String(account?.accountStatus || '').toUpperCase();
+
+    if (['FROZEN', 'SUSPENDED', 'BLOCKED'].includes(accountStatus)) {
+        return {
+            status: 423,
+            message: `La ${role} está ${accountStatus.toLowerCase()} y no puede operar`,
+            extra: {
+                status: accountStatus,
+                reason: account.frozenReason || null
+            }
+        };
+    }
+
+    if (accountStatus === 'CLOSED') {
+        return {
+            status: 400,
+            message: `La ${role} está cerrada y no puede operar`,
+            extra: {
+                status: accountStatus
+            }
+        };
+    }
+
+    if (!account?.status) {
+        return {
+            status: 400,
+            message: `La ${role} no está habilitada para operar`,
+            extra: {
+                status: accountStatus || 'INACTIVE'
+            }
+        };
+    }
+
+    return null;
+};
+
 const getUserEmailAndName = async (userId) => {
     try {
         if (!userId) return null;
@@ -283,33 +320,27 @@ export const createTransfer = async (req, res) => {
             });
         }
 
-        if (!sourceAccount.status || !destinationAccount.status) {
+        const sourceBlockedResponse = getAccountBlockedResponse(sourceAccount, 'cuenta origen');
+        if (sourceBlockedResponse) {
             await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, 'Transferencia rechazada: ambas cuentas deben estar activas para realizar la transferencia');
-            return res.status(400).json({
+            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: ${sourceBlockedResponse.message}. ${sourceBlockedResponse.extra?.reason || 'Por favor contacta con soporte.'}`);
+            return res.status(sourceBlockedResponse.status).json({
                 success: false,
-                message: 'Ambas cuentas deben estar activas para realizar la transferencia'
+                message: sourceBlockedResponse.message,
+                reason: sourceBlockedResponse.extra?.reason,
+                status: sourceBlockedResponse.extra?.status
             });
         }
 
-        if (sourceAccount.accountStatus === 'FROZEN' || sourceAccount.accountStatus === 'SUSPENDED' || sourceAccount.accountStatus === 'BLOCKED') {
+        const destinationBlockedResponse = getAccountBlockedResponse(destinationAccount, 'cuenta destino');
+        if (destinationBlockedResponse) {
             await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: tu cuenta está ${sourceAccount.accountStatus}. ${sourceAccount.frozenReason || 'Por favor contacta con soporte.'}`);
-            return res.status(423).json({
+            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: ${destinationBlockedResponse.message}`);
+            return res.status(destinationBlockedResponse.status).json({
                 success: false,
-                message: `Tu cuenta está ${sourceAccount.accountStatus.toLowerCase()}`,
-                reason: sourceAccount.frozenReason,
-                status: sourceAccount.accountStatus
-            });
-        }
-
-        if (destinationAccount.accountStatus === 'FROZEN' || destinationAccount.accountStatus === 'SUSPENDED' || destinationAccount.accountStatus === 'BLOCKED') {
-            await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, 'Transferencia rechazada: la cuenta destino no está disponible para recibir transferencias');
-            return res.status(423).json({
-                success: false,
-                message: 'La cuenta destino no está disponible para recibir transferencias',
-                status: destinationAccount.accountStatus
+                message: destinationBlockedResponse.message,
+                status: destinationBlockedResponse.extra?.status,
+                reason: destinationBlockedResponse.extra?.reason
             });
         }
 
@@ -623,6 +654,7 @@ const createTransactionAudit = async ({
 export const revertTransfer = async (req, res) => {
     try {
         const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
 
         if (!actorUserId) {
             return res.status(401).json({ 
@@ -633,11 +665,12 @@ export const revertTransfer = async (req, res) => {
 
         const { id } = req.params;
         const reason = req.body?.reason || null;
+        const isAdmin = actorRole === 'Admin';
 
         let transfer = await Transaction.findOne({
             where: {
                 id,
-                type: 'TRANSFERENCIA_ENVIADA'
+                type: { [Op.in]: ['TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA'] }
             }
         });
 
@@ -648,9 +681,11 @@ export const revertTransfer = async (req, res) => {
             });
         }
 
-        if (transfer.accountId) {
-            const sourceAccount = await Account.findByPk(transfer.accountId);
-            if (!sourceAccount || sourceAccount.userId !== actorUserId) {
+        const isReceivedType = transfer.type === 'TRANSFERENCIA_RECIBIDA';
+
+        if (transfer.accountId && !isAdmin) {
+            const accountOfTransfer = await Account.findByPk(transfer.accountId);
+            if (!accountOfTransfer || accountOfTransfer.userId !== actorUserId) {
                 return res.status(403).json({
                     success: false,
                     message: 'No tienes permiso para revertir esta transferencia'
@@ -706,7 +741,7 @@ export const revertTransfer = async (req, res) => {
         const timeElapsedSeconds = Math.floor(timeElapsedMs / 1000);
         const FIVE_MINUTES_MS = 5 * 60 * 1000; 
 
-        if (timeElapsedMs > FIVE_MINUTES_MS) {
+        if (timeElapsedMs > FIVE_MINUTES_MS && !isAdmin) {
             await createTransactionAudit({
                 transactionId: transfer.id,
                 actorUserId,
@@ -734,7 +769,7 @@ export const revertTransfer = async (req, res) => {
             transfer = await Transaction.findOne({
                 where: {
                     id,
-                    type: 'TRANSFERENCIA_ENVIADA'
+                    type: { [Op.in]: ['TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA'] }
                 },
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
@@ -748,12 +783,16 @@ export const revertTransfer = async (req, res) => {
                 });
             }
 
-            const sourceAccount = await Account.findByPk(transfer.accountId, {
+            const isReceivedType = transfer.type === 'TRANSFERENCIA_RECIBIDA';
+            const senderAccountId = isReceivedType ? transfer.relatedAccountId : transfer.accountId;
+            const receiverAccountId = isReceivedType ? transfer.accountId : transfer.relatedAccountId;
+
+            const sourceAccount = await Account.findByPk(senderAccountId, {
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
             });
 
-            const destinationAccount = await Account.findByPk(transfer.relatedAccountId, {
+            const destinationAccount = await Account.findByPk(receiverAccountId, {
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
             });
@@ -762,7 +801,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(404).json({
                     success: false,
-                    message: 'Cuenta origen no encontrada'
+                    message: 'Cuenta emisora original no encontrada'
                 });
             }
 
@@ -770,7 +809,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(404).json({
                     success: false,
-                    message: 'Cuenta destino no encontrada'
+                    message: 'Cuenta receptora original no encontrada'
                 });
             }
 
@@ -795,7 +834,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(400).json({
                     success: false,
-                    message: 'La cuenta destino no tiene saldo suficiente para revertir la transferencia',
+                    message: 'La cuenta receptora no tiene saldo suficiente para revertir la transferencia',
                     currentBalance: destBalance.toFixed(2),
                     amountToRevert: transferAmount.toFixed(2)
                 });
@@ -811,9 +850,30 @@ export const revertTransfer = async (req, res) => {
             transfer.isReverted = true;
             transfer.revertedAt = now;
             transfer.revertedBy = actorUserId;
-            transfer.revertReason = reason || 'Reversión dentro de ventana de 5 minutos';
+            transfer.revertReason = reason || 'Reversión autorizada';
             transfer.description = `${transfer.description} | REVERTIDA por ${actorUserId}: ${transfer.revertReason}`;
             await transfer.save({ transaction: dbTransaction });
+
+            // Intentar marcar la transacción hermana (el otro lado de la transferencia)
+            const siblingTransaction = await Transaction.findOne({
+                where: {
+                    accountId: receiverAccountId,
+                    relatedAccountId: senderAccountId,
+                    amount: transfer.amount,
+                    type: isReceivedType ? 'TRANSFERENCIA_ENVIADA' : 'TRANSFERENCIA_RECIBIDA',
+                    status: 'COMPLETADA'
+                },
+                transaction: dbTransaction
+            });
+
+            if (siblingTransaction) {
+                siblingTransaction.status = 'REVERTIDA';
+                siblingTransaction.isReverted = true;
+                siblingTransaction.revertedAt = now;
+                siblingTransaction.revertedBy = actorUserId;
+                siblingTransaction.revertReason = 'Reversión vinculada a movimiento principal';
+                await siblingTransaction.save({ transaction: dbTransaction });
+            }
 
             const compensationTransaction = await Transaction.create(
                 {

@@ -90,6 +90,11 @@ export const LoginForm = ({ onForgot }) => {
         actionText="Regístrate aquí"
         onClick={() => navigate('/register')}
       />
+      <AuthSwitchLink
+        prefixText="¿Problemas con la cuenta?"
+        actionText="Contacta soporte"
+        onClick={() => navigate('/contact')}
+      />
     </form>
   );
 };

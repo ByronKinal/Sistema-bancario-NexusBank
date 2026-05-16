@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { adminDashboardService } from '../../../shared/api/adminDashboard.service.js';
 import { Card } from '@material-tailwind/react';
 import { FaTrophy, FaChartLine } from 'react-icons/fa';
-import AdminLayout from '../../../shared/components/layout/AdminLayout.jsx';
+import AdminLayout from '../../../shared/components/layout/admin/AdminLayout.jsx';
 
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '—';

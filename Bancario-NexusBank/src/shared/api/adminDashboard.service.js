@@ -186,6 +186,16 @@ export const adminDashboardService = {
     }
   },
 
+  revertTransfer: async (id, payload = {}) => {
+    try {
+      const response = await adminRequest('put', `/accounts/transfers/${id}/revert`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error reverting transfer:', error);
+      throw error;
+    }
+  },
+
   approveAccount: async (id) => {
     try {
       const response = await adminRequest('post', `/admin/accounts/${id}/enable`);
@@ -212,6 +222,36 @@ export const adminDashboardService = {
       return response.data;
     } catch (error) {
       console.error('Error rejecting account:', error);
+      throw error;
+    }
+  },
+
+  getAdminAccountDetails: async (accountId) => {
+    try {
+      const response = await adminRequest('get', `/admin/accounts/${accountId}/details`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching admin account details:', error);
+      throw error;
+    }
+  },
+
+  freezeAccount: async (accountId, payload) => {
+    try {
+      const response = await adminRequest('post', `/admin/accounts/${accountId}/freeze`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error freezing account:', error);
+      throw error;
+    }
+  },
+
+  unfreezeAccount: async (accountId, payload) => {
+    try {
+      const response = await adminRequest('post', `/admin/accounts/${accountId}/unfreeze`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error unfreezing account:', error);
       throw error;
     }
   },

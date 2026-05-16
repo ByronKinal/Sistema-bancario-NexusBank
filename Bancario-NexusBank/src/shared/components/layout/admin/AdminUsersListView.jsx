@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import AdminLayout from './AdminLayout.jsx';
-import "../../../styles/countlist.css";
-import { adminDashboardService } from "../../api/adminDashboard.service.js";
-import { useAuthStore } from "../../../features/auth/store/authStore.js";
+import "../../../../styles/countlist.css";
+import { adminDashboardService } from "../../../api/adminDashboard.service.js";
+import { useAuthStore } from "../../../../features/auth/store/authStore.js";
 import { useNavigate } from "react-router-dom";
  
 const ROLES = ["Cliente", "Empleado", "Administrador"];

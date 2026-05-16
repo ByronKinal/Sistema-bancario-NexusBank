@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
 import { useNavigate } from 'react-router-dom';
 
 const AdminNotifications = () => {

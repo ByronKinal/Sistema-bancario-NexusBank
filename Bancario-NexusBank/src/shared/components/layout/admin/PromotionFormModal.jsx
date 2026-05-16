@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
 
 const PROMOTION_TYPES = [
   'APERTURA_CUENTA_BONUS',

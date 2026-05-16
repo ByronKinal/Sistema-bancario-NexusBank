@@ -524,8 +524,8 @@ export const register = async (req, res) => {
     await UserRole.create({ UserId: user.id, RoleId: clientRole.id }, { transaction });
 
     const accountNumber = await generateAccountNumber(accountType || 'ahorro');
-    const finalAccountStatus = isAdmin ? 'ACTIVE' : 'UNDER_REVIEW';
-    const finalStatus = isAdmin ? true : false;
+    const finalAccountStatus = 'ACTIVE';
+    const finalStatus = true;
     
     await Account.create({
       accountNumber,
@@ -539,10 +539,9 @@ export const register = async (req, res) => {
     await transaction.commit();
 
     // No enviar correo de verificación al crear la cuenta.
-    // La cuenta permanecerá pendiente de aprobación y el flujo de aprobación
-    // se encargará de notificar al usuario cuando su cuenta sea activada.
+    // La cuenta queda activa desde su creación y el usuario podrá usarla de inmediato.
     const response = {
-      msg: 'Usuario registrado. La cuenta está pendiente de aprobación por un administrador.',
+      msg: 'Usuario registrado. La cuenta fue creada y quedó activa.',
       emailSent: false,
       user: { id: user.id, email: user.email }
     };

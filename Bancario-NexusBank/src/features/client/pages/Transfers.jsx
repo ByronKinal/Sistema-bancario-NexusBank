@@ -4,6 +4,8 @@ import { jsPDF } from 'jspdf';
 import { useClientStore } from '../store/useClientStore.js';
 import { clientTransferService } from '../../../shared/api/clientTransfer.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
+import { useAuthStore } from '../../auth/store/authStore.js';
+import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved } from '../../../shared/utils/reversalRequests.js';
 
 const DAILY_TRANSFER_LIMIT = 2000;
 
@@ -47,6 +49,7 @@ const normalizeTransfer = (transfer, fallback = {}) => {
 export const Transfers = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
 
   const {
     accounts,
@@ -69,11 +72,22 @@ export const Transfers = () => {
   const [selectedTransferId, setSelectedTransferId] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [pendingTransfer, setPendingTransfer] = useState(null);
+  const [reversalUpdates, setReversalUpdates] = useState(0);
 
   useEffect(() => {
     fetchAllAccounts();
     fetchRecentTransactions(10);
   }, [fetchAllAccounts, fetchRecentTransactions]);
+
+  useEffect(() => {
+    const onReversalUpdate = () => setReversalUpdates((prev) => prev + 1);
+    window.addEventListener('nexusbank-reversals-updated', onReversalUpdate);
+    window.addEventListener('storage', onReversalUpdate);
+    return () => {
+      window.removeEventListener('nexusbank-reversals-updated', onReversalUpdate);
+      window.removeEventListener('storage', onReversalUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -134,31 +148,58 @@ export const Transfers = () => {
     return Array.isArray(transactions)
       ? transactions
           .filter((tx) => String(tx.type || '').includes('TRANSFERENCIA'))
-          .map((tx) => normalizeTransfer({
-            id: tx.id || tx.transactionId || tx._id,
-            reference: tx.reference || tx.transactionId || tx.id,
-            sourceAccountNumber: tx.sourceAccountNumber || tx.accountNumber || '',
-            destinationAccountNumber: tx.destinationAccountNumber || '',
-            recipientType: tx.recipientType || 'TERCERO',
-            amount: tx.amount,
-            description: tx.description || tx.concept || 'Transferencia',
-            status: tx.status || 'COMPLETADA',
-            createdAt: tx.createdAt || tx.date || tx.updatedAt,
-            balanceAfter: tx.balanceAfter ?? tx.newBalance ?? null,
-          }))
+          .map((tx) => {
+            const transactionId = String(tx.id || tx.transactionId || tx._id || '');
+            const ref = String(tx.reference || tx.transactionId || tx.id || '');
+            const isReverted = isReversalApproved(transactionId) || isReversalApproved(ref) || String(tx.status).toUpperCase() === 'REVERTIDA';
+            return normalizeTransfer({
+              id: transactionId,
+              reference: ref,
+              sourceAccountNumber: tx.sourceAccountNumber || tx.accountNumber || '',
+              destinationAccountNumber: tx.destinationAccountNumber || '',
+              recipientType: tx.recipientType || 'TERCERO',
+              amount: tx.amount,
+              description: tx.description || tx.concept || 'Transferencia',
+              status: isReverted ? 'REVERTIDA' : (tx.status || 'COMPLETADA'),
+              createdAt: tx.createdAt || tx.date || tx.updatedAt,
+              balanceAfter: tx.balanceAfter ?? tx.newBalance ?? null,
+            });
+          })
       : [];
-  }, [transactions]);
+  }, [transactions, reversalUpdates]);
 
   const transferHistory = useMemo(() => {
+    // 1. Get all transactions from both sources
     const combined = [...recentTransfers, ...backendTransferHistory];
-    const unique = new Map();
-
+    
+    // 2. Identify unique transactions, preferring the latest one (usually backend has more info)
+    const uniqueMap = new Map();
     combined.forEach((item) => {
-      unique.set(String(item.reference || item.id), item);
+      const txId = String(item.id || item.transactionId || item._id || '');
+      if (txId) uniqueMap.set(txId, item);
     });
 
-    return Array.from(unique.values()).sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [backendTransferHistory, recentTransfers]);
+    // 3. Process the list to apply the REVERTIDA status where appropriate
+    return Array.from(uniqueMap.values())
+      .map((item) => {
+        const transactionId = String(item.id || item.transactionId || item._id || '');
+        const ref = String(item.reference || item.transactionId || item.id || '');
+        
+        // A transaction is reverted if it matches an approved reversal request OR its backend status is already REVERTIDA
+        const isReverted = isReversalApproved(transactionId) || isReversalApproved(ref) || String(item.status).toUpperCase() === 'REVERTIDA';
+        
+        return {
+          ...item,
+          status: isReverted ? 'REVERTIDA' : (item.status || 'COMPLETADA')
+        };
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [backendTransferHistory, recentTransfers, reversalUpdates]);
+
+  const latestReversibleTransaction = useMemo(() => getLatestReversibleTransaction(transferHistory.map((transfer) => ({
+    ...transfer,
+    type: 'TRANSFERENCIA',
+  }))), [transferHistory]);
 
   const selectedTransfer = useMemo(() => {
     if (selectedTransferId) {
@@ -178,6 +219,7 @@ export const Transfers = () => {
     const amountFormatted = formatAmount(transfer.amount);
     const dateFormatted = new Date(transfer.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
     const recipientLabel = recipientTypes.find((item) => item.value === transfer.recipientType)?.label || transfer.recipientType || 'Tercero';
+    const statusLabel = transfer.status === 'REVERTIDA' ? 'REVERTIDA' : transfer.status;
 
     return `<!doctype html>
 <html lang="es">
@@ -198,6 +240,7 @@ export const Transfers = () => {
     .row span:last-child { color: #0F172A; font-weight: 600; text-align: right; }
     .badge { display: inline-flex; padding: 10px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
     .approved { background: #D1FAE5; color: #065F46; }
+    .reverted { background: #FEE2E2; color: #991B1B; }
     .note { margin: 24px 0 0; padding: 18px 20px; border-radius: 20px; background: #ECFDF5; color: #065F46; font-size: 14px; line-height: 1.6; }
     @media print {
       body { background: white; }
@@ -215,7 +258,7 @@ export const Transfers = () => {
         <p class="ref">REF: ${transfer.reference}</p>
       </div>
       <div class="section">
-        <div class="row"><span>Estado</span><span><span class="badge approved">${transfer.status}</span></span></div>
+        <div class="row"><span>Estado</span><span><span class="badge ${transfer.status === 'REVERTIDA' ? 'reverted' : 'approved'}">${statusLabel}</span></span></div>
         <div class="row"><span>Fecha</span><span>${dateFormatted}</span></div>
         <div class="row"><span>Cuenta origen</span><span>${transfer.sourceAccountNumber}</span></div>
         <div class="row"><span>Cuenta destino</span><span>${transfer.destinationAccountNumber}</span></div>
@@ -403,6 +446,44 @@ export const Transfers = () => {
   const handlePrint = () => {
     if (!selectedTransfer) return;
     openReceiptWindow(selectedTransfer, false);
+  };
+
+  const canReverseTransfer = (transfer) => {
+    if (!transfer || !latestReversibleTransaction || transfer.status === 'REVERTIDA') return false;
+    return String(transfer.id) === String(latestReversibleTransaction.id)
+      || String(transfer.reference) === String(latestReversibleTransaction.reference);
+  };
+
+  const handleRequestReversal = (transfer) => {
+    if (!transfer) return;
+
+    const reason = window.prompt('Describe por qué quieres revertir esta transferencia:') || '';
+    if (!reason.trim()) {
+      showError('Debes escribir un motivo para enviar la reversión.');
+      return;
+    }
+
+    try {
+      addReversalRequest({
+        type: 'TRANSFERENCIA',
+        operationId: transfer.id,
+        reference: transfer.reference,
+        amount: transfer.amount,
+        sourceAccountNumber: transfer.sourceAccountNumber,
+        destinationAccountNumber: transfer.destinationAccountNumber,
+        operationDate: transfer.date,
+        operationDescription: transfer.description,
+        reason,
+        userId: user?.id,
+        userEmail: user?.email,
+        userName: user?.name || user?.username || null,
+      });
+
+      showSuccess('Solicitud de reversión enviada al administrador.');
+      navigate('/clientdashboard/reversions');
+    } catch (requestError) {
+      showError(requestError?.message || 'No fue posible solicitar la reversión.');
+    }
   };
 
   return (
@@ -670,7 +751,9 @@ export const Transfers = () => {
                 <p className="text-sm text-gray-500">Resultado de la última transferencia.</p>
               </div>
               {selectedTransfer && (
-                <span className="rounded-full bg-[#E8F2FF] px-3 py-1 text-xs font-semibold text-[#1B4A8F]">{selectedTransfer.status}</span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedTransfer.status === 'REVERTIDA' ? 'bg-red-100 text-red-700' : 'bg-[#E8F2FF] text-[#1B4A8F]'}`}>
+                  {selectedTransfer.status}
+                </span>
               )}
             </div>
 
@@ -724,10 +807,8 @@ export const Transfers = () => {
                   const isActive = selectedTransfer?.id === item.id;
 
                   return (
-                    <button
+                    <div
                       key={`${item.id}-${item.reference}`}
-                      type="button"
-                      onClick={() => setSelectedTransferId(item.id)}
                       className={`w-full rounded-2xl border p-4 text-left transition ${isActive ? 'border-[#2D5899] bg-[#EFF4FF]' : 'border-gray-200 bg-white hover:border-[#2D5899]/50'}`}
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -735,9 +816,30 @@ export const Transfers = () => {
                           <p className="font-bold text-[#1A2E52]">Q {formatAmount(item.amount)}</p>
                           <p className="text-xs text-gray-500 mt-1">{item.sourceAccountNumber} → {item.destinationAccountNumber}</p>
                         </div>
-                        <span className="rounded-full bg-[#E8F2FF] px-3 py-1 text-[11px] font-semibold text-[#1B4A8F]">{item.status}</span>
+                        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.status === 'REVERTIDA' ? 'bg-red-100 text-red-700' : 'bg-[#E8F2FF] text-[#1B4A8F]'}`}>
+                          {item.status}
+                        </span>
                       </div>
-                    </button>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTransferId(item.id)}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isActive ? 'bg-[#2D5899] text-white' : 'bg-white border border-[#2D5899] text-[#2D5899] hover:bg-[#2D5899] hover:text-white'}`}
+                        >
+                          Ver
+                        </button>
+                        {canReverseTransfer(item) && (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestReversal(item)}
+                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
+                          >
+                            Revertir
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   );
                 })
               )}

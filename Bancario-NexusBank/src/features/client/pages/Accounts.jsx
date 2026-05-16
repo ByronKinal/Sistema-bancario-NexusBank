@@ -54,7 +54,7 @@ const TxIcon = ({ type }) => {
 };
  
 const Accounts = () => {
-  const { accounts, userProfile, fetchAllAccounts, loading } = useClientStore();
+  const { accounts, mainAccount, userProfile, fetchAllAccounts, fetchMainAccount, loading } = useClientStore();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState(null);
@@ -64,15 +64,17 @@ const Accounts = () => {
   useEffect(() => {
     const init = async () => {
       await fetchAllAccounts();
+      await fetchMainAccount();
       const txs = await clientAccountService.getRecentTransactions(50).catch(() => []);
       setRecentTx(txs || []);
     };
     init();
-  }, [fetchAllAccounts]);
+  }, [fetchAllAccounts, fetchMainAccount]);
  
   useEffect(() => {
-    if (!selected && accounts && accounts.length > 0) setSelected(accounts[0]);
-  }, [accounts, selected]);
+    const primary = mainAccount || (accounts && accounts.length > 0 ? accounts[0] : null);
+    if (!selected && primary) setSelected(primary);
+  }, [accounts, mainAccount, selected]);
  
   const handleSelect = (acc) => setSelected(acc);
  
@@ -99,10 +101,36 @@ const Accounts = () => {
     const type = String(t.type || '').toLowerCase();
     return type.includes('dep') || ['deposito','deposit'].includes(type);
   });
+
+  const primaryAccount = mainAccount || (accounts.length > 0 ? accounts[0] : null);
+  const secondaryAccounts = accounts.filter((account) => {
+    if (!primaryAccount) return true;
+    return String(account.id) !== String(primaryAccount.id) && String(account.accountNumber) !== String(primaryAccount.accountNumber);
+  });
+
+  const totalAccounts = primaryAccount
+    ? secondaryAccounts.length + 1
+    : secondaryAccounts.length;
  
   const userName = user?.name || userProfile?.Name || user?.firstName || user?.username || '—';
   const userId = user?.id || userProfile?.id || userProfile?.UserId || userProfile?.userId || '—';
  
+  const accountStatusLabel = (account) => {
+    const s = String(account?.accountStatus || account?.status || '').toUpperCase();
+    if (s === 'FROZEN') return 'Congelada';
+    if (s === 'SUSPENDED') return 'Suspendida';
+    if (s === 'BLOCKED') return 'Bloqueada';
+    if (s === 'CLOSED') return 'Cerrada';
+    if (s === 'UNDER_REVIEW') return 'En revisión';
+    return 'Activa';
+  };
+
+  const accountBadgeClass = (account) => {
+    const s = String(account?.accountStatus || account?.status || '').toUpperCase();
+    if (['FROZEN','SUSPENDED','BLOCKED'].includes(s)) return 'acct-badge--pending';
+    return 'acct-badge--active';
+  };
+
   return (
     <div className="accounts-page animate-fade-in-up">
  
@@ -114,7 +142,7 @@ const Accounts = () => {
         </div>
         <div className="email-pill">
           <span className="email-pill-dot"></span>
-          <span className="email-pill-txt">ID {userId} · {accounts.length} cuenta{accounts.length !== 1 ? 's' : ''}</span>
+          <span className="email-pill-txt">ID {userId} · {totalAccounts} cuenta{totalAccounts !== 1 ? 's' : ''}</span>
         </div>
       </div>
  
@@ -141,8 +169,34 @@ const Accounts = () => {
           {!loading && accounts.length === 0 && (
             <p className="accounts-empty">No hay cuentas disponibles.</p>
           )}
+
+          {!loading && primaryAccount && (
+            <div
+              onClick={() => handleSelect(primaryAccount)}
+              className={`acct-card acct-card--selected`}
+              style={{ '--accent': '#C8A84B' }}
+            >
+              <div className="acct-card__bar" style={{ background: '#C8A84B' }}></div>
+              <div className="acct-card__corner" style={{ background: '#FEF9ED' }}>
+                {getAccountIcon(primaryAccount)}
+              </div>
+              <div className="acct-card__type">{getAccountTypeLabel(primaryAccount)} (Principal)</div>
+              <div className="acct-card__num">
+                {primaryAccount.accountNumber || primaryAccount.number || '**** **** **** ****'}
+              </div>
+              <div className="acct-card__saldo-lbl">Saldo disponible</div>
+              <div className="acct-card__saldo">
+                Q {(primaryAccount.accountBalance || primaryAccount.balance || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="acct-card__foot">
+                <span className={`acct-badge ${accountBadgeClass(primaryAccount)}`}>
+                  {accountStatusLabel(primaryAccount)}
+                </span>
+              </div>
+            </div>
+          )}
  
-          {accounts.map((acc) => {
+          {secondaryAccounts.map((acc) => {
             const isSelected = selected && (selected.id === acc.id || selected.accountNumber === acc.accountNumber);
             const accent = getAccountAccentColor(acc);
             const iconBg = accent === '#2D5899' ? '#EDF2FA' : accent === '#C8A84B' ? '#FEF9ED' : '#E6F4ED';
@@ -166,8 +220,8 @@ const Accounts = () => {
                   Q {(acc.accountBalance || acc.balance || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
                 </div>
                 <div className="acct-card__foot">
-                  <span className={`acct-badge ${acc.status === 'ACTIVA' || acc.status === 'ACTIVE' || !acc.status ? 'acct-badge--active' : 'acct-badge--pending'}`}>
-                    {acc.status === 'ACTIVA' || acc.status === 'ACTIVE' || !acc.status ? 'Activa' : acc.status}
+                  <span className={`acct-badge ${accountBadgeClass(acc)}`}>
+                    {accountStatusLabel(acc)}
                   </span>
                 </div>
               </div>
@@ -304,7 +358,7 @@ const Accounts = () => {
                       </div>
                       <div className="info-row">
                         <span className="info-key">Estado</span>
-                        <span className="info-val info-val--active">{selected.status || selected.state || 'Activa'}</span>
+                        <span className="info-val info-val--active">{accountStatusLabel(selected)}</span>
                       </div>
                     </div>
                   </div>

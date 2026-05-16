@@ -1,5 +1,5 @@
   import React, { useEffect, useRef, useState } from 'react';
-import { notificationService } from '../../api/notification.service.js';
+import { notificationService } from '../../../api/notification.service.js';
 import { useNavigate } from 'react-router-dom';
 
 const ClientNotifications = () => {
@@ -8,6 +8,7 @@ const ClientNotifications = () => {
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
+  
 
   const load = async () => {
     try {
@@ -23,6 +24,10 @@ const ClientNotifications = () => {
 
   useEffect(() => {
     load();
+
+    // Load once on mount (no polling)
+    load();
+    return;
   }, []);
 
   useEffect(() => {

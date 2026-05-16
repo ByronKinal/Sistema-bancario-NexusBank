@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import EmployeeLayout from './EmployeeLayout.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
+import { getReversalRequests } from '../../../utils/reversalRequests.js';
+import '../../../../styles/adminDashboard.css';
 
 const EmployeDashnoardContainer = () => {
     const [deposits, setDeposits] = useState([]);
@@ -35,6 +36,16 @@ const EmployeDashnoardContainer = () => {
         return channel;
     };
 
+    const getApprovedReversalKeys = () => {
+        const approvedReversals = getReversalRequests().filter((item) => String(item.status || '').toUpperCase() === 'APPROVED');
+        return new Set(
+            approvedReversals.flatMap((item) => [
+                String(item.operationId || ''),
+                String(item.reference || ''),
+            ].filter(Boolean))
+        );
+    };
+
     const fetchDeposits = async () => {
         try {
             setLoading(true);
@@ -59,9 +70,16 @@ const EmployeDashnoardContainer = () => {
                 }))
                 : [];
 
-            setDeposits(normalized);
+            const approvedReversalKeys = getApprovedReversalKeys();
+            const visibleDeposits = normalized.filter((dep) => {
+                const depositId = String(dep.id || '');
+                const depositReference = String(dep.reference || '');
+                return !approvedReversalKeys.has(depositId) && !approvedReversalKeys.has(depositReference);
+            });
+
+            setDeposits(visibleDeposits);
             if (!selectedDepositId && normalized.length > 0) {
-                setSelectedDepositId(normalized[0].id);
+                setSelectedDepositId(visibleDeposits[0]?.id || null);
             }
         } catch (error) {
             console.error(error);
@@ -73,6 +91,20 @@ const EmployeDashnoardContainer = () => {
 
     useEffect(() => {
         fetchDeposits();
+    }, []);
+
+    useEffect(() => {
+        const refreshDeposits = () => {
+            fetchDeposits();
+        };
+
+        window.addEventListener('nexusbank-reversals-updated', refreshDeposits);
+        window.addEventListener('storage', refreshDeposits);
+
+        return () => {
+            window.removeEventListener('nexusbank-reversals-updated', refreshDeposits);
+            window.removeEventListener('storage', refreshDeposits);
+        };
     }, []);
 
     // Lookup account holder name when account number or type changes (debounced)

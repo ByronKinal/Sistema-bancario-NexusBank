@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getReversalRequests } from '../../../utils/reversalRequests.js';
 
 const AdminSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [pendingReversions, setPendingReversions] = useState(0);
   const sidebarStyle = {
     width: 220,
     background: '#102b55',
@@ -13,6 +15,22 @@ const AdminSidebar = () => {
   };
   const sectionTitle = { fontSize: 12, color: '#7fa6ea', margin: '12px 0 8px' };
   const item = { padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' };
+
+  useEffect(() => {
+    const load = () => {
+      const pending = getReversalRequests().filter((item) => String(item.status || '').toUpperCase() === 'PENDING').length;
+      setPendingReversions(pending);
+    };
+
+    load();
+    window.addEventListener('nexusbank-reversals-updated', load);
+    window.addEventListener('storage', load);
+
+    return () => {
+      window.removeEventListener('nexusbank-reversals-updated', load);
+      window.removeEventListener('storage', load);
+    };
+  }, []);
 
   return (
     <aside style={sidebarStyle}>
@@ -68,6 +86,19 @@ const AdminSidebar = () => {
             onClick={() => navigate('/AdminDashboard/requests')}
           >
             Pendientes <span style={{marginLeft:6, background:'#f59e0b', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#0b1220'}}>3</span>
+          </div>
+          <div 
+            style={{...item, background: location.pathname === '/AdminDashboard/control-accounts' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/control-accounts' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/control-accounts' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/control-accounts')}
+          >
+            Control de cuentas
+          </div>
+          <div 
+            style={{...item, marginTop:6, background: location.pathname === '/AdminDashboard/reversions' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/reversions' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/reversions' ? 700 : 400}}
+            onClick={() => navigate('/AdminDashboard/reversions')}
+          >
+            Reversiones
+            <span style={{marginLeft:6, background:'#f59e0b', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#0b1220'}}>{pendingReversions}</span>
           </div>
         </div>
       </nav>

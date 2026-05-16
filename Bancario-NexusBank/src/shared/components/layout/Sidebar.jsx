@@ -14,6 +14,7 @@ export const Sidebar = () => {
     { path: '/clientdashboard/account-history', label: 'Historial', icon: '📜' },
     { path: '/clientdashboard/deposits', label: 'Depósitos', icon: '💰' },
     { path: '/clientdashboard/transfers', label: 'Transferencias', icon: '💸' },
+    { path: '/clientdashboard/reversions', label: 'Reversiones', icon: '↩️' },
     { path: '/clientdashboard/favorites', label: 'Favoritos', icon: '⭐' },
     { path: '/clientdashboard/promotions', label: 'Promociones', icon: '🎁' },
   ];

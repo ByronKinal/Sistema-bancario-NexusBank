@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import AdminNavbar from './AdminNavbar.jsx';
 import AdminSidebar from './AdminSidebar.jsx';
 import PromotionFormModal from './PromotionFormModal.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
-import '../../../styles/promotions.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
+import '../../../../styles/promotions.css';
 
 const PROMOTION_TYPES = [
   'APERTURA_CUENTA_BONUS',

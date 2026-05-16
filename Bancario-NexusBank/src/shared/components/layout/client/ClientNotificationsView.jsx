@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { notificationService } from '../../api/notification.service.js';
-import '../../../styles/adminDashboard.css';
+import { notificationService } from '../../../api/notification.service.js';
+import '../../../../styles/adminDashboard.css';
 
 const ClientNotificationsView = () => {
   const [notifications, setNotifications] = useState([]);

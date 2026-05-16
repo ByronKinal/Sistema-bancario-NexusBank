@@ -88,10 +88,11 @@
 
 /* Right Side - Form */
 .register-form-wrapper {
-  background: #fff;
-  padding: 50px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  /* Remove inner white panel so AuthCard provides the card UI */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .register-badge {
@@ -102,21 +103,21 @@
   border-radius: 20px;
   font-size: 11px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   letter-spacing: 0.5px;
 }
 
 .register-title {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
   color: #1a2c4a;
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
 }
 
 .register-subtitle {
-  font-size: 14px;
+  font-size: 13px;
   color: #6b7280;
-  margin-bottom: 30px;
+  margin-bottom: 12px;
 }
 
 .form-grid {

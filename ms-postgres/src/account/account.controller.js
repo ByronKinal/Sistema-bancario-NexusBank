@@ -113,6 +113,29 @@ const createAccountLimitAudit = async ({
     }
 };
 
+const getAccountSortTimestamp = (account) => {
+    const value = account?.openedAt || account?.createdAt || account?.updatedAt || 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const sortAccountsForDisplay = (accounts = []) => {
+    return [...accounts].sort((left, right) => {
+        const leftStatus = String(left?.accountStatus || '').toUpperCase();
+        const rightStatus = String(right?.accountStatus || '').toUpperCase();
+
+        if (leftStatus === 'ACTIVE' && rightStatus !== 'ACTIVE') return -1;
+        if (rightStatus === 'ACTIVE' && leftStatus !== 'ACTIVE') return 1;
+
+        const leftTime = getAccountSortTimestamp(left);
+        const rightTime = getAccountSortTimestamp(right);
+
+        if (leftTime !== rightTime) return leftTime - rightTime;
+
+        return String(left?.accountNumber || '').localeCompare(String(right?.accountNumber || ''));
+    });
+};
+
 export const listAccounts = async (req, res) => {
     try {
         const currentUserId = req.user?.id;
@@ -169,6 +192,8 @@ export const listAccounts = async (req, res) => {
 
             accountsData = accounts.map(acc => acc.toJSON());
         }
+
+        accountsData = sortAccountsForDisplay(accountsData);
 
         return res.status(200).json({ success: true, data: accountsData });
     } catch (error) {
@@ -1285,6 +1310,7 @@ export const freezeAccount = async (req, res) => {
                     performedByName: 'Equipo de Administración NexusBank'
                 }
             ));
+            // (notification creation omitted to preserve previous behavior)
         }
 
         return res.status(200).json({
@@ -1417,6 +1443,7 @@ export const unfreezeAccount = async (req, res) => {
                     performedByName: 'Equipo de Administración NexusBank'
                 }
             ));
+            // (notification creation omitted to preserve previous behavior)
         }
 
         return res.status(200).json({
