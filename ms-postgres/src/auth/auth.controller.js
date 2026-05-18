@@ -8,6 +8,7 @@ import {
 import { UserEmail } from './userEmail.model.js';
 import { Role, UserRole } from './role.model.js';
 import { Account } from '../account/account.model.js';
+import { AccountRequest } from '../account/accountRequest.model.js';
 import config from '../../configs/config.js';
 import { uploadBufferToCloudinary } from '../../configs/cloudinary.js';
 import { Op } from 'sequelize';
@@ -523,25 +524,28 @@ export const register = async (req, res) => {
     const clientRole = await ensureRole('Cliente');
     await UserRole.create({ UserId: user.id, RoleId: clientRole.id }, { transaction });
 
-    const accountNumber = await generateAccountNumber(accountType || 'ahorro');
-    const finalAccountStatus = 'ACTIVE';
-    const finalStatus = true;
-    
-    await Account.create({
-      accountNumber,
+    // En lugar de crear la cuenta directamente, crear una solicitud de cuenta
+    // para que el administrador la revise y apruebe.
+    await AccountRequest.create({
       userId: user.id,
       accountType: accountType || 'ahorro',
-      status: finalStatus,
-      accountStatus: finalAccountStatus,
-      accountBalance: 0
+      status: 'PENDING'
     }, { transaction });
 
     await transaction.commit();
 
-    // No enviar correo de verificación al crear la cuenta.
-    // La cuenta queda activa desde su creación y el usuario podrá usarla de inmediato.
+    // Enviar notificación por email informando que la solicitud fue recibida
+    try {
+      const profile = await UserProfile.findOne({ where: { UserId: user.id } });
+      const contact = { email: user.email, name: profile?.Name || profile?.Username || user.email };
+      // Reusar flujo de correo para solicitud recibida
+      await notificationService.sendFraudAlert(user.id, { title: 'Solicitud recibida', message: 'Tu solicitud de apertura de cuenta fue recibida y está pendiente de aprobación.' }).catch(() => {});
+    } catch (emailErr) {
+      console.error('Error enviando notificación de registro:', emailErr && emailErr.message ? emailErr.message : emailErr);
+    }
+
     const response = {
-      msg: 'Usuario registrado. La cuenta fue creada y quedó activa.',
+      msg: 'Usuario registrado. Tu solicitud de apertura de cuenta quedó pendiente de aprobación administrativa.',
       emailSent: false,
       user: { id: user.id, email: user.email }
     };

@@ -32,14 +32,53 @@ export const sendEmail = async (to, subject, html) => {
         const fromName = process.env.EMAIL_FROM_NAME || 'NexusBank';
 
         console.log('→ Intentando enviar email a:', to);
-        const info = await transporter.sendMail({
-            from: `"${fromName}" <${fromAddress}>`,
-            to,
-            subject,
-            html
-        });
-        console.log('✓ Email enviado exitosamente:', { messageId: info.messageId, to, subject });
-        return { success: true, messageId: info.messageId };
+        try {
+            const info = await transporter.sendMail({
+                from: `"${fromName}" <${fromAddress}>`,
+                to,
+                subject,
+                html
+            });
+            console.log('✓ Email enviado exitosamente:', { messageId: info.messageId, to, subject });
+            return { success: true, messageId: info.messageId };
+        } catch (sendErr) {
+            console.error('Send Error (primary):', sendErr && sendErr.message ? sendErr.message : sendErr);
+
+            // Si falla por timeout o unreachable, intentar fallback a puerto 587 (STARTTLS)
+            const errCode = sendErr && sendErr.code ? sendErr.code : null;
+            if (errCode === 'ESOCKET' || errCode === 'ETIMEDOUT' || errCode === 'ENETUNREACH') {
+                try {
+                    console.log('Intentando fallback SMTP en puerto 587 (STARTTLS)...');
+                    const fallbackTransporter = nodemailer.createTransport({
+                        host: process.env.SMTP_HOST,
+                        port: 587,
+                        secure: false,
+                        tls: { rejectUnauthorized: false },
+                        auth: {
+                            user: process.env.SMTP_USERNAME,
+                            pass: process.env.SMTP_PASSWORD
+                        },
+                        logger: true,
+                        debug: true
+                    });
+
+                    const info2 = await fallbackTransporter.sendMail({
+                        from: `"${fromName}" <${fromAddress}>`,
+                        to,
+                        subject,
+                        html
+                    });
+
+                    console.log('✓ Email enviado (fallback 587):', { messageId: info2.messageId, to, subject });
+                    return { success: true, messageId: info2.messageId };
+                } catch (fallbackErr) {
+                    console.error('Send Error (fallback):', fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
+                    return { success: false, error: fallbackErr && fallbackErr.message ? fallbackErr.message : String(fallbackErr) };
+                }
+            }
+
+            return { success: false, error: sendErr && sendErr.message ? sendErr.message : String(sendErr) };
+        }
     } catch (error) {
         console.error('✗ Error al enviar email:', {
             to,

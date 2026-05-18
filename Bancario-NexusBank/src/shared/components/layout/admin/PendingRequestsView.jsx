@@ -16,23 +16,42 @@ const PendingRequestsView = () => {
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const accountsRes = await adminDashboardService.getAccounts();
+      const [requestsRes, accountsRes] = await Promise.all([
+        adminDashboardService.getPendingAccountRequests(),
+        adminDashboardService.getAccounts()
+      ]);
 
-      const accData = accountsRes.data || [];
-      const pendingAccounts = accData
-        .filter(acc => ['UNDER_REVIEW', 'CLOSED'].includes(acc.accountStatus))
+      const reqData = requestsRes?.data || [];
+      const accData = accountsRes?.data || [];
+
+      const fromRequests = reqData.map(r => ({
+        id: r.id,
+        source: 'request',
+        type: 'CUENTA',
+        requestType: 'Apertura de Cuenta',
+        userName: r.User?.email || r.userId || 'Cliente',
+        amount: 'N/A',
+        status: r.status === 'PENDING' ? 'PENDIENTE' : (r.status === 'REJECTED' ? 'RECHAZADA' : r.status),
+        date: new Date(r.createdAt).toLocaleString(),
+        raw: r
+      }));
+
+      const fromAccounts = (accData || [])
+        .filter(acc => acc.accountStatus === 'UNDER_REVIEW')
         .map(acc => ({
           id: acc.id,
-          type: 'CUENTA',
-          requestType: 'Apertura de Cuenta',
+          source: 'account',
+          type: 'CUENTA_EXISTENTE',
+          requestType: 'Apertura de Cuenta (registro previo)',
           userName: acc.User?.email || acc.userId || 'Cliente',
           amount: 'N/A',
-          status: acc.accountStatus === 'UNDER_REVIEW' ? 'PENDIENTE' : 'RECHAZADA',
-          date: new Date(acc.createdAt).toLocaleString(),
+          status: 'PENDIENTE',
+          date: new Date(acc.createdAt || acc.openedAt || Date.now()).toLocaleString(),
           raw: acc
         }));
 
-      setRequests(pendingAccounts.sort((a, b) => new Date(b.raw.createdAt) - new Date(a.raw.createdAt)));
+      const combined = [...fromRequests, ...fromAccounts];
+      setRequests(combined.sort((a, b) => new Date(b.raw.createdAt || b.raw.openedAt || 0) - new Date(a.raw.createdAt || a.raw.openedAt || 0)));
     } catch (error) {
       console.error(error);
       showError('Error al cargar las solicitudes');
@@ -48,7 +67,13 @@ const PendingRequestsView = () => {
   const handleApprove = async (req) => {
     if (!window.confirm(`¿Estás seguro de que deseas aprobar la cuenta de ${req.userName}?`)) return;
     try {
-      await adminDashboardService.approveAccount(req.id);
+      if (req.source === 'request') {
+        await adminDashboardService.approveAccountRequest(req.id);
+      } else if (req.source === 'account') {
+        await adminDashboardService.approveAccount(req.id);
+      } else {
+        throw new Error('Tipo de elemento desconocido');
+      }
       showSuccess('Cuenta aprobada exitosamente');
       fetchRequests();
     } catch (error) {
@@ -69,7 +94,8 @@ const PendingRequestsView = () => {
     let errorCount = 0;
     for (const req of pendientes) {
       try {
-        await adminDashboardService.approveAccount(req.id);
+        if (req.source === 'request') await adminDashboardService.approveAccountRequest(req.id);
+        else if (req.source === 'account') await adminDashboardService.approveAccount(req.id);
         successCount++;
       } catch (e) {
         errorCount++;
@@ -83,7 +109,13 @@ const PendingRequestsView = () => {
   const handleReject = async (req) => {
     if (!window.confirm(`¿Estás seguro de que deseas rechazar la cuenta de ${req.userName}?`)) return;
     try {
-      await adminDashboardService.rejectAccount(req.id);
+      if (req.source === 'request') {
+        await adminDashboardService.rejectAccountRequest(req.id);
+      } else if (req.source === 'account') {
+        await adminDashboardService.rejectAccount(req.id);
+      } else {
+        throw new Error('Tipo de elemento desconocido');
+      }
       showSuccess('Cuenta rechazada exitosamente');
       fetchRequests();
     } catch (error) {

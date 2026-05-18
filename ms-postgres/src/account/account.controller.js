@@ -1605,17 +1605,47 @@ export const approveAccountRequest = async (req, res) => {
             approvedAt: new Date()
         });
 
+        // Marcar usuario como aprobado
+        const user = await User.findByPk(accountRequest.userId);
+        if (user) {
+            user.isApproved = true;
+            await user.save();
+
+            // Generar token de verificación
+            const verificationToken = generateEmailVerificationToken(user.id);
+            console.log(`[ACCOUNT-APPROVE] Token generado para usuario ${user.id}: ${verificationToken}`);
+
+            // Obtener datos del usuario para el email
+            const accountOwner = await getUserEmailAndName(accountRequest.userId);
+            console.log(`[ACCOUNT-APPROVE] Datos de usuario: ${JSON.stringify(accountOwner)}`);
+            
+            if (accountOwner) {
+                console.log(`[ACCOUNT-APPROVE] Enviando email a: ${accountOwner.email}`);
+                // Enviar email de forma asincrónica sin bloquear
+                sendEmailSafe(() => sendAccountApprovedEmail(
+                    accountOwner.email,
+                    accountOwner.name,
+                    verificationToken
+                )).catch(err => console.error('Error en sendEmailSafe:', err));
+            } else {
+                console.error(`[ACCOUNT-APPROVE] No se pudo obtener email para usuario: ${accountRequest.userId}`);
+            }
+        } else {
+            console.error(`[ACCOUNT-APPROVE] Usuario no encontrado: ${accountRequest.userId}`);
+        }
+
         try {
             const Notification = (await import('../notifications/notification.model.js')).default;
-            await Notification.create({
+            // Crear notificación de forma asincrónica sin bloquear
+            Notification.create({
                 userId: accountRequest.userId,
                 title: 'Cuenta creada y aprobada',
                 message: `Tu solicitud fue aprobada. La cuenta ${newAccount.accountNumber} ya fue creada y habilitada.`,
                 url: `/my-account/${newAccount.id}`,
                 read: false
-            });
+            }).catch(notifErr => console.error('Error creando notificación:', notifErr && notifErr.message ? notifErr.message : notifErr));
         } catch (notifErr) {
-            console.error('Error creando notificación de solicitud aprobada:', notifErr && notifErr.message ? notifErr.message : notifErr);
+            console.error('Error importando Notification model:', notifErr && notifErr.message ? notifErr.message : notifErr);
         }
 
         return res.status(200).json({
