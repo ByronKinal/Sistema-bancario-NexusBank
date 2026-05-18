@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../../features/auth/store/authStore.js';
-import Logo from '../../../assets/img/Logo.jpg';
-import '../../../styles/AdminNavbar.css';
+import { useAuthStore } from '../../../../features/auth/store/authStore.js';
+import Logo from '../../../../assets/img/Logo.jpg';
+import AdminNotifications from './AdminNotifications.jsx';
+import '../../../../styles/AdminNavbar.css';
 
 const buildAvatarSrc = (url) => {
 	if (!url) return null;
@@ -32,6 +33,13 @@ const AdminNavbar = () => {
 	const displayUserName = user?.username || user?.name || user?.firstName || 'Usuario';
 	const rawPhotoUrl = user?.profilePhotoUrl || '';
 	const avatarSrc = buildAvatarSrc(rawPhotoUrl);
+
+	const roleMap = { Admin: 'Administrador', Employee: 'Empleado', Client: 'Cliente' };
+	const userRole = roleMap[user?.role] || user?.role || 'Administrador';
+
+	// Foto: construir igual que el Navbar del cliente
+	const photoBase = avatarSrc ? avatarSrc.split('?')[0] : '';
+	const photoSrc = photoBase ? `${photoBase}?t=${rawPhotoUrl.length}_${Date.now()}` : '';
 
 	// Cerrar dropdown cuando se hace clic fuera
 	useEffect(() => {
@@ -73,6 +81,8 @@ const AdminNavbar = () => {
 		alignItems: 'center',
 		gap: 8,
 		padding: '8px 12px',
+		borderLeft: '1px solid rgba(255,255,255,0.08)',
+		paddingLeft: 16,
 		borderRadius: 6,
 		cursor: 'pointer',
 		userSelect: 'none',
@@ -159,94 +169,53 @@ const AdminNavbar = () => {
 					<img src={Logo} alt="NexusBank Logo" style={logoImg} />
 				</div>
 
-				{/* User Menu */}
-				<div
-					ref={userMenuRef}
-					style={userContainerStyle}
-					onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#062147'}
-					onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0b2b52'}
-					onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-				>
-					{/* Avatar — key={rawPhotoUrl} fuerza re-render cuando la URL cambia */}
-					{avatarSrc ? (
-						<img
-							key={rawPhotoUrl}
-							src={`${avatarSrc}?t=${Date.now()}`}
-							alt={displayUserName}
-							style={{ width: 32, height: 32, borderRadius: 9999, objectFit: 'cover' }}
-							onError={(e) => { e.currentTarget.style.display = 'none'; }}
-						/>
-					) : (
-						<svg
-							style={userIconStyle}
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-						>
-							<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-							<circle cx="12" cy="7" r="4"></circle>
-						</svg>
-					)}
+				{/* Right-side (replicar Navbar del cliente) */}
+				<div className="flex items-center space-x-6 relative">
+					{/* Campana / notificaciones (componente) */}
+					<div style={{ display: 'flex', alignItems: 'center' }}>
+						<AdminNotifications />
+					</div>
 
-					{/* Username — reactivo directo del store */}
-					<div style={userNameStyle}>{displayUserName}</div>
-
-					{/* Flecha */}
-					<svg
-						style={arrowStyle}
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
+					{/* Usuario */}
+					<div
+						className="flex items-center space-x-3 border-l pl-6 border-gray-300/50 cursor-pointer select-none"
+						onClick={() => setIsDropdownOpen(!isDropdownOpen)}
 					>
-						<polyline points="6 9 12 15 18 9"></polyline>
-					</svg>
+						<div className="text-right hidden sm:block">
+							<p className="text-sm font-bold text-white">{displayUserName}</p>
+							<p className="text-xs text-gray-200">{userRole}</p>
+						</div>
+
+						{photoSrc ? (
+							<img
+								key={rawPhotoUrl}
+								src={photoSrc}
+								alt={displayUserName}
+								className="w-10 h-10 rounded-full object-cover shadow-md hover:shadow-lg transition-shadow border-2 border-[#C8A84B]"
+								onError={(e) => { e.currentTarget.style.display = 'none'; }}
+							/>
+						) : (
+							<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#2D5899] to-[#C8A84B] items-center justify-center text-white font-bold shadow-md hover:shadow-lg transition-shadow" style={{ display: 'flex' }}>
+								{displayUserName.charAt(0).toUpperCase()}
+							</div>
+						)}
+					</div>
 
 					{/* Dropdown */}
 					{isDropdownOpen && (
-						<div style={dropdownStyle}>
-							<div
-								style={dropdownItemStyle}
-								onClick={(e) => {
-									e.stopPropagation();
-									setIsDropdownOpen(false);
-									navigate('/AdminDashboard/profile-settings');
-								}}
-								onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
-								onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+						<div className="absolute top-14 right-0 w-48 bg-white border border-gray-100 shadow-2xl rounded-xl py-2 z-50">
+							<button
+								onClick={() => { setIsDropdownOpen(false); navigate('/AdminDashboard/profile-settings'); }}
+								className="w-full text-left px-4 py-2 text-sm font-semibold text-[#1A2E52] hover:bg-blue-50 transition-colors flex items-center"
 							>
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-									<circle cx="12" cy="12" r="3"></circle>
-									<path d="M12 1v6m0 6v6"></path>
-									<path d="M4.22 4.22l4.24 4.24m4.24 0l4.24 4.24"></path>
-									<path d="M1 12h6m6 0h6"></path>
-									<path d="M4.22 19.78l4.24-4.24m4.24 0l4.24-4.24"></path>
-								</svg>
-								Ajustes del perfil
-							</div>
-
-							<div
-								style={logoutItemStyle}
-								onClick={(e) => {
-									e.stopPropagation();
-									logout();
-									setIsDropdownOpen(false);
-								}}
-								onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
-								onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+								<span className="mr-2">⚙️</span> Ajustes de perfil
+							</button>
+							<button
+								onClick={() => { setIsDropdownOpen(false); logout(); }}
+								className="w-full text-left px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center"
 							>
-								<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-									<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-									<polyline points="16 17 21 12 16 7"></polyline>
-									<line x1="21" y1="12" x2="9" y2="12"></line>
-								</svg>
-								Cerrar sesión
-							</div>
+								<span className="mr-2">🚪</span> Cerrar Sesión
+							</button>
 						</div>
 					)}
 				</div>

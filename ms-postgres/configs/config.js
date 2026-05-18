@@ -2,6 +2,8 @@
 export default {
   jwtSecret: process.env.JWT_SECRET || 'default-secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || `${process.env.JWT_SECRET || 'default-secret'}-refresh`,
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   transfers: {
     maxAmount: Number(process.env.MAX_TRANSFER_AMOUNT || 2000),
     maxDailyAmountBySource: Number(process.env.MAX_DAILY_TRANSFER_BY_SOURCE || 10000),

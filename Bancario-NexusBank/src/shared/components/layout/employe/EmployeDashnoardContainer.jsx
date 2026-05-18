@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import EmployeeLayout from './EmployeeLayout.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
+import { getReversalRequests } from '../../../utils/reversalRequests.js';
+import '../../../../styles/adminDashboard.css';
 
 const EmployeDashnoardContainer = () => {
     const [deposits, setDeposits] = useState([]);
@@ -10,6 +11,12 @@ const EmployeDashnoardContainer = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('TODOS');
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newAccountNumber, setNewAccountNumber] = useState('');
+    const [newAccountType, setNewAccountType] = useState('ahorro');
+    const [newAmount, setNewAmount] = useState('');
+    const [foundAccountName, setFoundAccountName] = useState(null);
+    const [lookupLoading, setLookupLoading] = useState(false);
 
     const getDisplayStatus = (status) => {
         if (status === 'PENDIENTE') return 'PENDIENTE';
@@ -27,6 +34,16 @@ const EmployeDashnoardContainer = () => {
         if (!channel) return 'Ventanilla / caja';
         if (channel.toLowerCase().includes('transferencia')) return 'Ventanilla / caja';
         return channel;
+    };
+
+    const getApprovedReversalKeys = () => {
+        const approvedReversals = getReversalRequests().filter((item) => String(item.status || '').toUpperCase() === 'APPROVED');
+        return new Set(
+            approvedReversals.flatMap((item) => [
+                String(item.operationId || ''),
+                String(item.reference || ''),
+            ].filter(Boolean))
+        );
     };
 
     const fetchDeposits = async () => {
@@ -53,9 +70,16 @@ const EmployeDashnoardContainer = () => {
                 }))
                 : [];
 
-            setDeposits(normalized);
+            const approvedReversalKeys = getApprovedReversalKeys();
+            const visibleDeposits = normalized.filter((dep) => {
+                const depositId = String(dep.id || '');
+                const depositReference = String(dep.reference || '');
+                return !approvedReversalKeys.has(depositId) && !approvedReversalKeys.has(depositReference);
+            });
+
+            setDeposits(visibleDeposits);
             if (!selectedDepositId && normalized.length > 0) {
-                setSelectedDepositId(normalized[0].id);
+                setSelectedDepositId(visibleDeposits[0]?.id || null);
             }
         } catch (error) {
             console.error(error);
@@ -68,6 +92,80 @@ const EmployeDashnoardContainer = () => {
     useEffect(() => {
         fetchDeposits();
     }, []);
+
+    useEffect(() => {
+        const refreshDeposits = () => {
+            fetchDeposits();
+        };
+
+        window.addEventListener('nexusbank-reversals-updated', refreshDeposits);
+        window.addEventListener('storage', refreshDeposits);
+
+        return () => {
+            window.removeEventListener('nexusbank-reversals-updated', refreshDeposits);
+            window.removeEventListener('storage', refreshDeposits);
+        };
+    }, []);
+
+    // Lookup account holder name when account number or type changes (debounced)
+    useEffect(() => {
+        if (!showCreateModal) return;
+
+        const cleaned = (newAccountNumber || '').trim();
+        if (!cleaned) {
+            setFoundAccountName(null);
+            return;
+        }
+
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            setLookupLoading(true);
+            setFoundAccountName(null);
+            try {
+                const resp = await adminDashboardService.getAccounts();
+                const accounts = resp?.data || resp?.accounts || resp || [];
+                const norm = (str) => (str || '').toString().replace(/\s|\-|\./g, '').toLowerCase();
+                const target = norm(cleaned);
+                const found = (Array.isArray(accounts) ? accounts : []).find((a) => {
+                    const accNum = norm(a.accountNumber || a.number || a.account || '');
+                    const type = (a.accountType || a.type || '').toString().toLowerCase();
+                    const typeMatch = !newAccountType || type.includes(newAccountType.toLowerCase());
+                    return typeMatch && (accNum === target || accNum.includes(target) || target.includes(accNum));
+                });
+
+                if (!cancelled) {
+                    if (found) {
+                        const nameCandidates = [
+                            found.alias,
+                            found.holderName,
+                            found.name,
+                            found.accountHolderName,
+                            found.owner?.name,
+                            found.User?.UserProfile?.Name,
+                            found.User?.profile?.name,
+                            found.User?.username,
+                            `${found.firstName || ''} ${found.lastName || ''}`.trim(),
+                        ];
+                        const name = nameCandidates.find((n) => n && String(n).trim());
+                        setFoundAccountName(name || 'Titular (sin nombre)');
+                    } else {
+                        setFoundAccountName(null);
+                    }
+                }
+            } catch (err) {
+                if (!cancelled) setFoundAccountName(null);
+            } finally {
+                if (!cancelled) setLookupLoading(false);
+            }
+        }, 450);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [newAccountNumber, newAccountType, showCreateModal]);
+
+    
 
     const selectedDeposit = deposits.find((item) => item.id === selectedDepositId) || deposits[0] || null;
 
@@ -128,6 +226,16 @@ const EmployeDashnoardContainer = () => {
                                 <h2 className="text-3xl font-bold text-[#1A2E52]">Panel de Empleado — Depósitos</h2>
                                 <p className="text-gray-500">Depósitos pendientes de aprobación y el detalle completo de cada solicitud.</p>
                             </div>
+                            <div className="mt-2 sm:mt-0">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowCreateModal(true); setNewAccountNumber(''); setNewAccountType('ahorro'); setFoundAccountName(null); }}
+                                    className="px-4 py-2 rounded-lg font-semibold"
+                                    style={{ backgroundColor: '#d4a017', color: '#0f172a' }}
+                                >
+                                    Crear depósito
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -148,6 +256,8 @@ const EmployeDashnoardContainer = () => {
                             <div className="stat-subtitle positive">Procesados</div>
                         </div>
                     </div>
+
+                    
 
                     <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
                         <div className="movements-section">
@@ -301,6 +411,96 @@ const EmployeDashnoardContainer = () => {
                         </div>
                     </div>
                 </div>
+                {/* Modal: Crear Depósito (entrada rápida) */}
+                {showCreateModal && (
+                    <div className="modal-backdrop">
+                        <div className="modal-card">
+                            <div className="modal-header">
+                                <h4 className="text-lg font-bold">Crear Depósito — Datos</h4>
+                                <button className="text-gray-500" onClick={() => setShowCreateModal(false)}>Cerrar</button>
+                            </div>
+
+                            <div className="modal-body">
+                                <label className="block text-sm font-semibold mb-1">Número de Cuenta</label>
+                                <input
+                                    type="text"
+                                    value={newAccountNumber}
+                                    onChange={(e) => setNewAccountNumber(e.target.value)}
+                                    placeholder="Ej. 001-1234567890-1"
+                                    className="w-full p-2 border rounded mb-3"
+                                />
+
+                                <label className="block text-sm font-semibold mb-1">Tipo de Cuenta</label>
+                                <select
+                                    value={newAccountType}
+                                    onChange={(e) => setNewAccountType(e.target.value)}
+                                    className="w-full p-2 border rounded mb-3"
+                                >
+                                    <option value="ahorro">Ahorro</option>
+                                    <option value="corriente">Corriente</option>
+                                </select>
+
+                                    <label className="block text-sm font-semibold mb-1">Monto</label>
+                                    <input
+                                        type="number"
+                                        value={newAmount}
+                                        onChange={(e) => setNewAmount(e.target.value)}
+                                        placeholder="Ej. 1500"
+                                        className="w-full p-2 border rounded mb-3"
+                                    />
+
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-600">Titular:</p>
+                                    {lookupLoading ? (
+                                        <p className="text-sm font-medium">Buscando...</p>
+                                    ) : foundAccountName ? (
+                                        <p className="text-sm font-medium text-green-700">{foundAccountName}</p>
+                                    ) : newAccountNumber ? (
+                                        <p className="text-sm font-medium text-red-600">No encontrado</p>
+                                    ) : (
+                                        <p className="text-sm font-medium text-gray-400">Ingresa número de cuenta</p>
+                                    )}
+                                </div>
+
+                                <div className="mt-4 flex justify-end gap-2">
+                                    <button className="px-4 py-2 rounded border" onClick={() => setShowCreateModal(false)}>Cancelar</button>
+                                    <button
+                                        className="px-4 py-2 rounded bg-amber-500 text-white"
+                                        onClick={async () => {
+                                            // Validaciones
+                                            if (!foundAccountName) return showError('Busca y selecciona una cuenta válida primero.');
+                                            const amount = Number(newAmount);
+                                            if (!amount || amount <= 0) return showError('Ingresa un monto válido.');
+
+                                            try {
+                                                const payload = {
+                                                    accountNumber: newAccountNumber,
+                                                    amount,
+                                                    description: 'Depósito por ventanilla'
+                                                };
+                                                await adminDashboardService.createDepositForAccount(payload);
+                                                showSuccess('Depósito creado correctamente.');
+                                                setShowCreateModal(false);
+                                                setNewAccountNumber('');
+                                                setNewAccountType('ahorro');
+                                                setNewAmount('');
+                                                setFoundAccountName(null);
+                                                // refrescar lista
+                                                await new Promise(r => setTimeout(r, 500));
+                                                fetchDeposits();
+                                            } catch (err) {
+                                                console.error(err);
+                                                showError(err.response?.data?.message || 'Error creando el depósito');
+                                            }
+                                        }}
+                                    >
+                                        Listo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </section>
         </EmployeeLayout>
     );

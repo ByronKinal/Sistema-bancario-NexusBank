@@ -2,8 +2,10 @@ import { User, UserProfile, UserPasswordReset } from '../src/user/user.model.js'
 import { UserEmail } from '../src/auth/userEmail.model.js';
 import { Role, UserRole } from '../src/auth/role.model.js';
 import { Account } from '../src/account/account.model.js';
+import { AccountRequest } from '../src/account/accountRequest.model.js';
 import { Transaction } from '../src/transaction/transaction.model.js';
 import { AuditEvent } from '../src/audit/auditEvent.model.js';
+import Notification from '../src/notifications/notification.model.js';
 
 export function initializeAssociations() {
     User.hasOne(UserProfile, { 
@@ -46,6 +48,16 @@ export function initializeAssociations() {
         as: 'User' 
     });
 
+    User.hasMany(Notification, {
+        foreignKey: 'userId',
+        as: 'Notifications',
+        onDelete: 'CASCADE'
+    });
+    Notification.belongsTo(User, {
+        foreignKey: 'userId',
+        as: 'User'
+    });
+
     Role.hasMany(UserRole, { 
         foreignKey: 'roleId', 
         as: 'UserRoles',
@@ -75,6 +87,16 @@ export function initializeAssociations() {
         onDelete: 'CASCADE'
     });
     Account.belongsTo(User, { 
+        foreignKey: 'userId', 
+        as: 'User' 
+    });
+
+    User.hasMany(AccountRequest, { 
+        foreignKey: 'userId', 
+        as: 'AccountRequests',
+        onDelete: 'CASCADE'
+    });
+    AccountRequest.belongsTo(User, { 
         foreignKey: 'userId', 
         as: 'User' 
     });

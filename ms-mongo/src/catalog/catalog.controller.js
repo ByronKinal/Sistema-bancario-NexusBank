@@ -92,9 +92,9 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
     }
 
     const operationToPromoTypeMap = {
-      'DEPOSITO': 'DEPOSITO_CASHBACK',
-      'TRANSFERENCIA_TERCERO': 'TRANSFERENCIA_DESCUENTO',
-      'TRANSFERENCIA_PROPIA': 'TRANSFERENCIA_PROPIA_BONUS'
+      'APERTURA_CUENTA': 'APERTURA_CUENTA_BONUS',
+      'PRIMER_DEPOSITO': 'PRIMER_DEPOSITO_BONUS',
+      'TRANSFERENCIA_RECIBIDA': 'TRANSFERENCIA_RECIBIDA_BONUS'
     };
 
     const expectedPromoType = operationToPromoTypeMap[operationType];
@@ -109,7 +109,7 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
     let benefit = null;
 
     switch (promotion.promotionType) {
-      case 'DEPOSITO_CASHBACK':
+      case 'PRIMER_DEPOSITO_BONUS':
 
         if (promotion.minDepositAmount && amount < promotion.minDepositAmount) {
           return {
@@ -125,8 +125,10 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
         }
 
         let cashbackAmount = 0;
-        if (promotion.cashbackPercentage) {
-          cashbackAmount = (amount * promotion.cashbackPercentage) / 100;
+        const actualCashbackPercentage = promotion.cashbackPercentage || promotion.discountPercentage;
+        
+        if (actualCashbackPercentage) {
+          cashbackAmount = (amount * actualCashbackPercentage) / 100;
         } else if (promotion.cashbackAmount) {
           cashbackAmount = promotion.cashbackAmount;
         }
@@ -134,60 +136,41 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
         benefit = {
           type: 'CASHBACK',
           amount: Number(cashbackAmount.toFixed(2)),
-          description: `Cashback de Q${cashbackAmount.toFixed(2)} por depósito`
+          description: `Cashback de Q${cashbackAmount.toFixed(2)} por primer depósito`
         };
         break;
 
-      case 'TRANSFERENCIA_DESCUENTO':
+      case 'TRANSFERENCIA_RECIBIDA_BONUS':
         if (promotion.minTransferAmount && amount < promotion.minTransferAmount) {
           return {
             valid: false,
             message: `Cupón inválido: la transferencia debe ser mínimo Q${promotion.minTransferAmount}`
           };
         }
-        if (promotion.maxTransferAmount && amount > promotion.maxTransferAmount) {
-          return {
-            valid: false,
-            message: `Cupón inválido: la transferencia no puede exceder Q${promotion.maxTransferAmount}`
-          };
-        }
 
-        let discountAmount = 0;
-        if (promotion.discountPercentage) {
-          discountAmount = (amount * promotion.discountPercentage) / 100;
+        let transferBonusAmount = 0;
+        if (promotion.cashbackPercentage) {
+          transferBonusAmount = (amount * promotion.cashbackPercentage) / 100;
+        } else if (promotion.cashbackAmount) {
+          transferBonusAmount = promotion.cashbackAmount;
         }
 
         benefit = {
-          type: 'DISCOUNT',
-          amount: Number(discountAmount.toFixed(2)),
-          description: `Descuento de Q${discountAmount.toFixed(2)} (${promotion.discountPercentage}%) en transferencia`
+          type: 'CASHBACK',
+          amount: Number(transferBonusAmount.toFixed(2)),
+          description: `Bono de Q${transferBonusAmount.toFixed(2)} por recibir transferencia`
         };
         break;
 
-      case 'TRANSFERENCIA_PROPIA_BONUS':
+      case 'APERTURA_CUENTA_BONUS':
 
-        if (promotion.minTransferAmount && amount < promotion.minTransferAmount) {
-          return {
-            valid: false,
-            message: `Cupón inválido: la transferencia debe ser mínimo Q${promotion.minTransferAmount}`
-          };
-        }
+        let accountBonusAmount = promotion.cashbackAmount || 0;
 
-        let bonusAmount = 0;
-        if (promotion.bonusPoints) {
-          benefit = {
-            type: 'BONUS_POINTS',
-            amount: promotion.bonusPoints,
-            description: `${promotion.bonusPoints} puntos bonus por transferencia entre cuentas propias`
-          };
-        } else if (promotion.cashbackAmount) {
-          bonusAmount = promotion.cashbackAmount;
-          benefit = {
-            type: 'CASHBACK',
-            amount: Number(bonusAmount.toFixed(2)),
-            description: `Bonus de Q${bonusAmount.toFixed(2)} por transferencia propia`
-          };
-        }
+        benefit = {
+          type: 'CASHBACK',
+          amount: Number(accountBonusAmount.toFixed(2)),
+          description: `Bonificación de Q${accountBonusAmount.toFixed(2)} por apertura de cuenta`
+        };
         break;
 
       default:
@@ -218,6 +201,61 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
   }
 };
 
+export const getActiveAutomaticPromotion = async (req, res) => {
+  try {
+    const { operationType } = req.params;
+    
+    const operationToPromoTypeMap = {
+      'APERTURA_CUENTA': 'APERTURA_CUENTA_BONUS',
+      'PRIMER_DEPOSITO': 'PRIMER_DEPOSITO_BONUS',
+      'TRANSFERENCIA_RECIBIDA': 'TRANSFERENCIA_RECIBIDA_BONUS'
+    };
+
+    const expectedPromoType = operationToPromoTypeMap[operationType];
+
+    if (!expectedPromoType) {
+      return res.status(400).json({ success: false, message: 'Tipo de operación no válido' });
+    }
+
+    const today = new Date();
+    
+    // Find the first active promotion of this type that hasn't expired
+    const promotion = await Catalog.findOne({
+      promotionType: expectedPromoType,
+      status: 'ACTIVA',
+      $and: [
+        { $or: [{ startDate: null }, { startDate: { $lte: today } }] },
+        { $or: [{ endDate: null }, { endDate: { $gte: today } }] }
+      ],
+      $expr: {
+        $or: [
+          { $eq: ["$maxUsesTotalPromotion", null] },
+          { $lt: ["$usesCountTotal", "$maxUsesTotalPromotion"] }
+        ]
+      }
+    });
+
+    if (!promotion) {
+      return res.status(404).json({ success: false, message: 'No hay promoción automática activa' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      promotion: {
+        id: promotion._id,
+        name: promotion.name,
+        promotionType: promotion.promotionType,
+        cashbackAmount: promotion.cashbackAmount,
+        cashbackPercentage: promotion.cashbackPercentage
+      }
+    });
+
+  } catch (error) {
+    console.error('Error buscando promoción automática:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const incrementPromotionUsage = async (couponId, dbTransaction = null) => {
   try {
     await Catalog.findByIdAndUpdate(
@@ -232,24 +270,34 @@ export const incrementPromotionUsage = async (couponId, dbTransaction = null) =>
 
 export const getAllPromotions = async (req, res) => {
   try {
+    const { search } = req.query;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const promotions = await Catalog.find({
+    let query = {
       status: 'ACTIVA',
+      isExclusive: false,
       $or: [
         { endDate: { $gte: today } },
         { endDate: null }
       ]
-    })
-    .select('_id name description promotionType minDepositAmount maxDepositAmount minTransferAmount maxTransferAmount discountPercentage cashbackPercentage cashbackAmount startDate endDate isExclusive createdAt')
-    .sort({ createdAt: -1 });
+    };
+
+    if (search) {
+      query.$text = { $search: search };
+    }
+
+    const promotions = await Catalog.find(query)
+      .select('_id name description promotionType minDepositAmount maxDepositAmount minTransferAmount maxTransferAmount discountPercentage cashbackPercentage cashbackAmount startDate endDate isExclusive usesCountTotal maxUsesTotalPromotion createdAt')
+      .sort(search ? { score: { $meta: 'textScore' } } : { createdAt: -1 });
+
+    const validPromotions = promotions.filter(promo => isPromotionValid(promo));
 
     return res.status(200).json({
       success: true,
       message: 'Promociones disponibles',
-      count: promotions.length,
-      data: promotions
+      count: validPromotions.length,
+      data: validPromotions
     });
   } catch (error) {
     return res.status(500).json({
@@ -358,9 +406,8 @@ export const createPromotion = async (req, res) => {
     }
 
     const validTypes = [
-      'DEPOSITO_CASHBACK', 'TRANSFERENCIA_DESCUENTO',
-      'TRANSFERENCIA_PROPIA_BONUS', 'TRANSACCIONES_FRECUENTES',
-      'SALDO_MINIMO_REWARD', 'APERTURA_CUENTA_BONUS'
+      'APERTURA_CUENTA_BONUS', 'PRIMER_DEPOSITO_BONUS',
+      'TRANSFERENCIA_RECIBIDA_BONUS'
     ];
 
     if (!validTypes.includes(promotionType)) {

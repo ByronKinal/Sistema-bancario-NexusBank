@@ -10,7 +10,9 @@ import {
   updatePromotionStatus,
   getPromotionAudit,
   getAllAudit,
-  deletePromotion
+  deletePromotion,
+  getActiveAutomaticPromotion,
+  validateAndApplyCoupon
 } from './catalog.controller.js';
 import {
   validateCreatePromotion,
@@ -21,6 +23,22 @@ import {
 import { verifyTokenAndGetUser, verifyRoles } from '../../middlewares/role-middleware.js';
 
 const router = express.Router();
+
+router.get('/internal/active-promotion/:operationType', getActiveAutomaticPromotion);
+
+router.post('/internal/validate-coupon', async (req, res) => {
+  try {
+    const { couponId, operationType, amount } = req.body;
+    const validationResult = await validateAndApplyCoupon(couponId, operationType, amount);
+    
+    return res.status(validationResult.valid ? 200 : 400).json({
+      success: validationResult.valid,
+      ...validationResult
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 router.get('/admin/all', verifyTokenAndGetUser, verifyRoles(['Admin']), getAllPromotionsAdmin);
 

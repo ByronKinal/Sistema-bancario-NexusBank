@@ -6,7 +6,7 @@ import { Role, UserRole } from '../src/auth/role.model.js';
 export async function createDefaultEmployee() {
   const employeeEmail = 'empleado@nexusbank.com';
   const employeeUsername = 'EMPLEADO1';
-  const employeePassword = 'Empleado1!';
+  const employeePassword = 'EMPLEADO1';
 
   // Asegurar que el rol Empleado exista
   const [employeeRole] = await Role.findOrCreate({

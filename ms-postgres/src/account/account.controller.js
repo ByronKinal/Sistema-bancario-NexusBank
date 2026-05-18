@@ -1,8 +1,10 @@
 import { Account } from './account.model.js';
+import { AccountRequest } from './accountRequest.model.js';
 import { generateAccountNumber } from '../../helpers/account-generator.js';
 import { getExchangeRate } from '../../helpers/fx-service.js';
 import sequelize from '../../configs/db.js';
 import { Op } from 'sequelize';
+import { Transaction } from '../transaction/transaction.model.js';
 import { AccountLimitAudit } from './accountLimitAudit.model.js';
 import { AccountBlockHistory } from './accountBlockHistory.model.js';
 import { User, UserProfile } from '../user/user.model.js';
@@ -24,6 +26,7 @@ import {
     recordAuditEvent
 } from '../../services/audit.service.js';
 import { generateEmailVerificationToken } from '../../services/auth/token.service.js';
+import axios from 'axios';
 
 const findUserByRequestPayload = async ({ userId, email }) => {
     const normalizedUserId = (userId || '').toString().trim();
@@ -110,6 +113,29 @@ const createAccountLimitAudit = async ({
     }
 };
 
+const getAccountSortTimestamp = (account) => {
+    const value = account?.openedAt || account?.createdAt || account?.updatedAt || 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const sortAccountsForDisplay = (accounts = []) => {
+    return [...accounts].sort((left, right) => {
+        const leftStatus = String(left?.accountStatus || '').toUpperCase();
+        const rightStatus = String(right?.accountStatus || '').toUpperCase();
+
+        if (leftStatus === 'ACTIVE' && rightStatus !== 'ACTIVE') return -1;
+        if (rightStatus === 'ACTIVE' && leftStatus !== 'ACTIVE') return 1;
+
+        const leftTime = getAccountSortTimestamp(left);
+        const rightTime = getAccountSortTimestamp(right);
+
+        if (leftTime !== rightTime) return leftTime - rightTime;
+
+        return String(left?.accountNumber || '').localeCompare(String(right?.accountNumber || ''));
+    });
+};
+
 export const listAccounts = async (req, res) => {
     try {
         const currentUserId = req.user?.id;
@@ -167,6 +193,8 @@ export const listAccounts = async (req, res) => {
             accountsData = accounts.map(acc => acc.toJSON());
         }
 
+        accountsData = sortAccountsForDisplay(accountsData);
+
         return res.status(200).json({ success: true, data: accountsData });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
@@ -193,7 +221,8 @@ export const createAccount = async (req, res) => {
             accountType,
             idCliente,
             perTransactionLimit,
-            dailyTransactionLimit
+            dailyTransactionLimit,
+            couponId
         } = req.body;
 
         if (!idCliente) {
@@ -207,12 +236,60 @@ export const createAccount = async (req, res) => {
         
         const accountNumber = await generateAccountNumber(accountType);
 
+        let initialBalance = 0;
+        let appliedCouponAmount = 0;
+        let finalCouponId = couponId;
+
+        const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+
+        if (finalCouponId) {
+            try {
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId: finalCouponId,
+                    operationType: 'APERTURA_CUENTA',
+                    amount: 0
+                });
+
+                if (response.data.success && response.data.benefit) {
+                    const benefit = response.data.benefit;
+                    if (benefit.type === 'CASHBACK') {
+                        initialBalance = benefit.amount;
+                        appliedCouponAmount = benefit.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating coupon for account opening:', err.message);
+            }
+        } else {
+            // Buscar si hay un bono automático activo para apertura de cuenta
+            try {
+                const bonusRes = await axios.get(`${mongoApiUrl}/catalog/internal/active-promotion/APERTURA_CUENTA`);
+                if (bonusRes.data && bonusRes.data.success && bonusRes.data.promotion) {
+                    const promotion = bonusRes.data.promotion;
+                    if (promotion.cashbackAmount) {
+                        initialBalance = promotion.cashbackAmount;
+                        appliedCouponAmount = promotion.cashbackAmount;
+                        finalCouponId = promotion.id;
+                        
+                        // Increment promotion usage
+                        axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                            couponId: finalCouponId,
+                            operationType: 'APERTURA_CUENTA',
+                            amount: 0
+                        }).catch(e => console.error('Error incrementando uso del bono:', e.message));
+                    }
+                }
+            } catch (err) {
+                console.error('No se pudo aplicar el bono automático:', err.response?.data || err.message);
+            }
+        }
+
         const accountPayload = {
             accountNumber,
             userId: targetUserId,
             accountType,
             status: true,
-            accountBalance: 0
+            accountBalance: initialBalance
         };
 
         if (perTransactionLimit !== undefined) {
@@ -227,6 +304,18 @@ export const createAccount = async (req, res) => {
         accountPayload.lastAdminChangeReason = 'Creacion de cuenta';
 
         const account = await Account.create(accountPayload);
+
+        if (appliedCouponAmount > 0) {
+            await Transaction.create({
+                accountId: account.id,
+                type: 'DEPOSITO',
+                amount: appliedCouponAmount.toFixed(2),
+                description: 'Bono por apertura de cuenta',
+                balanceAfter: initialBalance.toFixed(2),
+                status: 'COMPLETADA',
+                appliedCouponId: finalCouponId
+            });
+        }
 
         const createdAccountOwner = await getUserEmailAndName(targetUserId);
         if (createdAccountOwner) {
@@ -341,6 +430,89 @@ export const requestAccountWithoutToken = async (req, res) => {
     }
 };
 
+export const requestAccountWithToken = async (req, res) => {
+    try {
+        const { accountType } = req.body;
+        const requesterId = req.user?.id;
+        const note = req.body?.note || '';
+        
+        if (!requesterId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (!accountType) {
+            return res.status(400).json({ success: false, message: 'accountType es requerido' });
+        }
+
+        const targetUser = await User.findByPk(requesterId, { attributes: ['id', 'email', 'status'] });
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+        }
+
+        if (!targetUser.status) {
+            return res.status(400).json({ success: false, message: 'El usuario se encuentra inactivo' });
+        }
+
+        const userIsClient = await isClientUser(requesterId);
+        if (!userIsClient) {
+            return res.status(403).json({ success: false, message: 'Solo clientes pueden solicitar cuentas' });
+        }
+
+        // Verificar si hay solicitud PENDING del mismo tipo
+        const pendingRequest = await AccountRequest.findOne({
+            where: {
+                userId: requesterId,
+                accountType: accountType,
+                status: 'PENDING'
+            }
+        });
+
+        if (pendingRequest) {
+            return res.status(409).json({
+                success: false,
+                message: 'Ya tienes una solicitud pendiente para este tipo de cuenta',
+                data: {
+                    requestId: pendingRequest.id,
+                    createdAt: pendingRequest.createdAt
+                }
+            });
+        }
+
+        // Crear solicitud (NO crear la cuenta aún)
+        const accountRequest = await AccountRequest.create({
+            userId: requesterId,
+            accountType: accountType,
+            note: note,
+            status: 'PENDING'
+        });
+
+        const accountOwner = await getUserEmailAndName(requesterId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendSecurityChangeEmail(accountOwner.email, accountOwner.name, {
+                changeType: 'Solicitud de apertura de cuenta recibida',
+                changes: {
+                    accountType: accountType,
+                    status: 'En revisión'
+                },
+                reason: 'Tu solicitud ha sido recibida. El administrador la revisará pronto y te notificaremos.'
+            }));
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: 'Solicitud de cuenta registrada exitosamente. Aguarda la aprobación del administrador.',
+            data: {
+                id: accountRequest.id,
+                accountType: accountRequest.accountType,
+                status: accountRequest.status,
+                createdAt: accountRequest.createdAt
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
+    }
+};
+
 export const enableRequestedAccount = async (req, res) => {
     try {
         const actorUserId = req.user?.id;
@@ -383,6 +555,46 @@ export const enableRequestedAccount = async (req, res) => {
             lastAdminChangeReason: reason || 'Habilitacion de cuenta solicitada sin token'
         });
 
+        // Aplicar bono automático de apertura de cuenta si existe
+        let appliedBonusAmount = 0;
+        let appliedCouponId = null;
+        try {
+            const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+            const bonusRes = await axios.get(`${mongoApiUrl}/catalog/internal/active-promotion/APERTURA_CUENTA`);
+            
+            if (bonusRes.data && bonusRes.data.success && bonusRes.data.promotion) {
+                const promotion = bonusRes.data.promotion;
+                appliedBonusAmount = promotion.cashbackAmount || 0;
+                appliedCouponId = promotion.id;
+
+                if (appliedBonusAmount > 0) {
+                    await account.update({
+                        accountBalance: parseFloat(account.accountBalance || 0) + appliedBonusAmount
+                    });
+
+                    const Transaction = (await import('../transaction/transaction.model.js')).Transaction;
+                    await Transaction.create({
+                        accountId: account.id,
+                        type: 'DEPOSITO',
+                        amount: appliedBonusAmount.toFixed(2),
+                        description: `Bono de bienvenida: ${promotion.name}`,
+                        balanceAfter: account.accountBalance,
+                        status: 'COMPLETADA',
+                        appliedCouponId: appliedCouponId
+                    });
+                    
+                    // Increment promotion usage
+                    axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                        couponId: appliedCouponId,
+                        operationType: 'APERTURA_CUENTA',
+                        amount: 0
+                    }).catch(e => console.error('Error incrementando uso del bono:', e.message));
+                }
+            }
+        } catch (err) {
+            console.error('No se pudo aplicar el bono automático de apertura:', err.response?.data || err.message);
+        }
+
         // Generar token de verificación y marcar como aprobado
         const user = await User.findByPk(account.userId);
         if (user) {
@@ -400,6 +612,19 @@ export const enableRequestedAccount = async (req, res) => {
                     accountOwner.name,
                     verificationToken
                 ));
+                // Crear notificación para el usuario: cuenta aprobada
+                try {
+                    const Notification = (await import('../notifications/notification.model.js')).default;
+                    await Notification.create({
+                        userId: account.userId,
+                        title: 'Cuenta aprobada',
+                        message: `Tu cuenta ${account.accountNumber} ha sido aprobada y habilitada.`,
+                        url: `/my-account/${account.id}`,
+                        read: false
+                    });
+                } catch (notifErr) {
+                    console.error('Error creando notificación de cuenta aprobada:', notifErr && notifErr.message ? notifErr.message : notifErr);
+                }
             }
         }
 
@@ -1085,6 +1310,7 @@ export const freezeAccount = async (req, res) => {
                     performedByName: 'Equipo de Administración NexusBank'
                 }
             ));
+            // (notification creation omitted to preserve previous behavior)
         }
 
         return res.status(200).json({
@@ -1217,6 +1443,7 @@ export const unfreezeAccount = async (req, res) => {
                     performedByName: 'Equipo de Administración NexusBank'
                 }
             ));
+            // (notification creation omitted to preserve previous behavior)
         }
 
         return res.status(200).json({
@@ -1318,5 +1545,155 @@ export const getAccountBlockHistory = async (req, res) => {
             message: 'Error en el servidor',
             error: error.message
         });
+    }
+};
+
+export const approveAccountRequest = async (req, res) => {
+    try {
+        const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
+        const { id: requestId } = req.params;
+        const { reason } = req.body || {};
+
+        if (!actorUserId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (actorRole !== 'Admin') {
+            return res.status(403).json({ success: false, message: 'Acceso denegado. Se requiere rol de Admin' });
+        }
+
+        const accountRequest = await AccountRequest.findByPk(requestId);
+        if (!accountRequest) {
+            return res.status(404).json({ success: false, message: 'Solicitud de cuenta no encontrada' });
+        }
+
+        if (accountRequest.status !== 'PENDING') {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden aprobar solicitudes pendientes',
+                currentStatus: accountRequest.status
+            });
+        }
+
+        const targetUser = await User.findByPk(accountRequest.userId, { attributes: ['id', 'email', 'status'] });
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: 'Usuario solicitante no encontrado' });
+        }
+
+        // Crear la cuenta real
+        const accountNumber = await generateAccountNumber(accountRequest.accountType);
+        const newAccount = await Account.create({
+            accountNumber,
+            userId: accountRequest.userId,
+            accountType: accountRequest.accountType,
+            status: true,
+            accountStatus: 'ACTIVE',
+            accountBalance: 0,
+            openedAt: new Date(),
+            lastAdminChangeBy: actorUserId,
+            lastAdminChangeAt: new Date(),
+            lastAdminChangeType: 'REQUEST_APPROVED',
+            lastAdminChangeReason: reason || 'Solicitud aprobada por administrador'
+        });
+
+        // Marcar solicitud como aprobada
+        await accountRequest.update({
+            status: 'APPROVED',
+            createdAccountId: newAccount.id,
+            approvedBy: actorUserId,
+            approvedAt: new Date()
+        });
+
+        try {
+            const Notification = (await import('../notifications/notification.model.js')).default;
+            await Notification.create({
+                userId: accountRequest.userId,
+                title: 'Cuenta creada y aprobada',
+                message: `Tu solicitud fue aprobada. La cuenta ${newAccount.accountNumber} ya fue creada y habilitada.`,
+                url: `/my-account/${newAccount.id}`,
+                read: false
+            });
+        } catch (notifErr) {
+            console.error('Error creando notificación de solicitud aprobada:', notifErr && notifErr.message ? notifErr.message : notifErr);
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Solicitud aprobada y cuenta creada exitosamente',
+            data: {
+                requestId: accountRequest.id,
+                createdAccountId: newAccount.id,
+                accountNumber: newAccount.accountNumber,
+                accountType: newAccount.accountType,
+                status: newAccount.accountStatus,
+                approvedBy: actorUserId,
+                approvedAt: accountRequest.approvedAt
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
+    }
+};
+
+export const rejectAccountRequest = async (req, res) => {
+    try {
+        const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
+        const { id: requestId } = req.params;
+        const { reason } = req.body || {};
+
+        if (!actorUserId) {
+            return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
+        }
+
+        if (actorRole !== 'Admin') {
+            return res.status(403).json({ success: false, message: 'Acceso denegado. Se requiere rol de Admin' });
+        }
+
+        const accountRequest = await AccountRequest.findByPk(requestId);
+        if (!accountRequest) {
+            return res.status(404).json({ success: false, message: 'Solicitud de cuenta no encontrada' });
+        }
+
+        if (accountRequest.status !== 'PENDING') {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden rechazar solicitudes pendientes',
+                currentStatus: accountRequest.status
+            });
+        }
+
+        await accountRequest.update({
+            status: 'REJECTED',
+            rejectedBy: actorUserId,
+            rejectedAt: new Date(),
+            rejectionReason: reason || 'Solicitud rechazada por administrador'
+        });
+
+        // Enviar email al usuario
+        const accountOwner = await getUserEmailAndName(accountRequest.userId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendAccountRejectedEmail(
+                accountOwner.email,
+                accountOwner.name,
+                reason || 'Tu solicitud de apertura de cuenta fue rechazada.'
+            ));
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Solicitud rechazada exitosamente',
+            data: {
+                requestId: accountRequest.id,
+                accountType: accountRequest.accountType,
+                status: accountRequest.status,
+                rejectedBy: actorUserId,
+                rejectedAt: accountRequest.rejectedAt,
+                rejectionReason: accountRequest.rejectionReason
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Error en el servidor', error: error.message });
     }
 };

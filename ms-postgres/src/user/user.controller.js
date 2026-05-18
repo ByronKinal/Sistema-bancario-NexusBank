@@ -85,6 +85,87 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
+export const getAdminDashboardInfo = async (req, res) => {
+  try {
+    const totalUsers = await User.count();
+    
+    // Transactions today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const transactionsToday = await Transaction.count({
+      where: {
+        createdAt: {
+          [Op.gte]: startOfDay
+        }
+      }
+    });
+
+    // Pending account requests
+    const { AccountRequest } = await import('../account/accountRequest.model.js');
+    const pendingAccounts = await AccountRequest.count({
+      where: { status: 'PENDING' }
+    });
+
+    // Recent transactions
+    const recentTransactions = await Transaction.findAll({
+      limit: 10,
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: Account,
+          as: 'Account',
+          attributes: ['accountNumber'],
+          include: [
+            {
+              model: User,
+              as: 'User',
+              attributes: ['id'],
+              include: [
+                {
+                  model: UserProfile,
+                  as: 'UserProfile',
+                  attributes: ['Name']
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    return sendSuccess(res, {
+      status: 200,
+      message: 'Información del dashboard obtenida exitosamente',
+      data: {
+        stats: {
+          totalUsers,
+          transactionsToday,
+          pendingAccounts
+        },
+        recentTransactions: recentTransactions.map(t => ({
+          id: t.id,
+          amount: t.amount,
+          type: t.type,
+          status: t.status ? t.status.toUpperCase() : 'PENDIENTE',
+          date: t.createdAt,
+          description: t.description,
+          accountNumber: t.Account?.accountNumber,
+          userName: t.Account?.User?.UserProfile?.Name || t.Account?.User?.username || 'N/A'
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('Error al obtener info del dashboard:', err);
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Error al obtener la información del dashboard',
+      details: err.message
+    });
+  }
+};
+
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -448,7 +529,8 @@ export const editOwnProfile = async (req, res) => {
       address,
       jobName,
       income,
-      profilePhotoUrl
+      profilePhotoUrl,
+      fraudAlerts
     } = req.body;
 
     const user = await User.findByPk(userId, {
@@ -523,14 +605,11 @@ export const editOwnProfile = async (req, res) => {
     }
 
     if (income !== undefined) {
-      const numericIncome = Number(income);
-      if (!Number.isFinite(numericIncome) || numericIncome < 0) {
-        return res.status(400).json({
-          success: false,
-          msg: 'Ingreso mensual invalido'
-        });
-      }
-      updateData.Income = numericIncome;
+      updateData.Income = income;
+    }
+    
+    if (fraudAlerts !== undefined) {
+      updateData.FraudAlerts = fraudAlerts;
     }
 
     if (profilePhotoUrl !== undefined) {
@@ -544,7 +623,23 @@ export const editOwnProfile = async (req, res) => {
       });
     }
 
+    const previousProfile = { ...user.UserProfile.get() };
     await user.UserProfile.update(updateData);
+
+    // Notificación por cambios importantes en el perfil
+    if (updateData.Username || updateData.FullName || updateData.Name || updateData.Address) {
+      await notificationService.sendFraudAlert(userId, {
+        title: 'Actualización de Datos de Perfil',
+        message: 'Se han realizado cambios importantes en tu información personal. Si no fuiste tú, contacta a soporte.',
+        emailType: 'FRAUD',
+        emailData: {
+          alertType: 'PROFILE_UPDATE',
+          severity: 'LOW',
+          description: 'Se detectó una actualización en los datos sensibles del perfil.',
+          detectedAt: new Date()
+        }
+      });
+    }
 
     await user.reload({ include: [{ model: UserProfile, as: 'UserProfile' }] });
 

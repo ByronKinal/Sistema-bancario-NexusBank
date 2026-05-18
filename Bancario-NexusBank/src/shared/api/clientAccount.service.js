@@ -26,12 +26,35 @@ const getFromBankingApi = (url, options = {}) => {
   });
 };
 
+const getAccountSortTimestamp = (account) => {
+  const value = account?.openedAt || account?.createdAt || account?.updatedAt || 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const sortAccountsForDisplay = (accounts = []) => {
+  return [...accounts].sort((left, right) => {
+    const leftStatus = String(left?.accountStatus || '').toUpperCase();
+    const rightStatus = String(right?.accountStatus || '').toUpperCase();
+
+    if (leftStatus === 'ACTIVE' && rightStatus !== 'ACTIVE') return -1;
+    if (rightStatus === 'ACTIVE' && leftStatus !== 'ACTIVE') return 1;
+
+    const leftTime = getAccountSortTimestamp(left);
+    const rightTime = getAccountSortTimestamp(right);
+
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    return String(left?.accountNumber || '').localeCompare(String(right?.accountNumber || ''));
+  });
+};
+
 export const clientAccountService = {
   // Obtener datos de la cuenta principal del cliente
   getMainAccount: async () => {
     try {
       const response = await getFromBankingApi('/accounts');
-      const accounts = response.data?.data || [];
+      const accounts = sortAccountsForDisplay(response.data?.data || []);
       return accounts.length > 0 ? accounts[0] : null;
     } catch (error) {
       console.error('Error fetching main account:', error);
@@ -43,7 +66,7 @@ export const clientAccountService = {
   getAllAccounts: async () => {
     try {
       const response = await getFromBankingApi('/accounts');
-      return response.data?.data || [];
+      return sortAccountsForDisplay(response.data?.data || []);
     } catch (error) {
       console.error('Error fetching accounts:', error);
       throw error;
@@ -67,20 +90,25 @@ export const clientAccountService = {
   // Obtener perfil del usuario
   getUserProfile: async () => {
     try {
-      // If we already have the user in the auth store, return a lightweight profile
-      const cached = useAuthStore.getState().user;
-      if (cached) {
-        return {
-          Name: cached.name || cached.fullName || null,
-          Username: cached.username || cached.name || null,
-          ProfilePhotoUrl: cached.profilePhotoUrl || null,
-        };
-      }
-
       const response = await getFromBankingApi('/auth/profile');
-      return response.data?.profile || response.data || null;
+      return response.data || null;
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar perfil del usuario
+  updateUserProfile: async (payload) => {
+    try {
+      const response = await axiosClientFallback.put('/profile/edit', payload, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
       throw error;
     }
   },
@@ -106,4 +134,63 @@ export const clientAccountService = {
       throw error;
     }
   },
+  // Enviar solicitud para abrir nueva cuenta (servidor debe manejarla)
+  createAccountRequest: async (payload) => {
+    try {
+      const response = await axiosClientFallback.post('/accounts/requests', payload, {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error creating account request:', error);
+      throw error;
+    }
+  },
+
+  // Obtener historial completo de movimientos con filtros y paginación
+  getAccountHistory: async (filters = {}) => {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        accountId = null,
+        type = null,
+        status = null,
+        startDate = null,
+        endDate = null
+      } = filters;
+
+      const params = new URLSearchParams();
+      params.append('page', page);
+      params.append('limit', limit);
+
+      if (accountId) params.append('accountId', accountId);
+      if (type) params.append('type', type);
+      if (status) params.append('status', status);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+
+      const response = await getFromBankingApi(`/my-account/history?${params.toString()}`);
+      return response.data?.data || { transactions: [], pagination: {}, summary: {} };
+    } catch (error) {
+      console.error('Error fetching account history:', error);
+      throw error;
+    }
+  },
+
+  // Obtener detalles de un movimiento específico
+  getTransactionDetail: async (transactionId) => {
+    try {
+      const response = await getFromBankingApi(`/accounts/transfers/${transactionId}`);
+      return response.data?.data || null;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      console.error('Error fetching transaction detail:', error);
+      throw error;
+    }
+  }
 };

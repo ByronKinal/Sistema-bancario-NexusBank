@@ -27,7 +27,7 @@ router.post('/accounts/transfers',
 
 router.get('/accounts/transfers/:transferId', verifyTokenAndGetUser, verifyRoles(['Client']), getTransferById);
 
-router.put('/accounts/transfers/:id/revert', verifyTokenAndGetUser, verifyRoles(['Client']), revertTransfer);
+router.put('/accounts/transfers/:id/revert', verifyTokenAndGetUser, verifyRoles(['Client', 'Admin']), revertTransfer);
 
 router.get('/my-account/history', verifyTokenAndGetUser, verifyRoles(['Client', 'Employee']), getMyAccountHistory);
 router.get('/client/transactions', verifyTokenAndGetUser, verifyRoles(['Client', 'Employee']), validateClientTransactionsQuery, getMyTransactions);

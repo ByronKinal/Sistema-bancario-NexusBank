@@ -4,6 +4,8 @@ import { jsPDF } from 'jspdf';
 import { useClientStore } from '../store/useClientStore.js';
 import { clientDepositService } from '../../../shared/api/clientDeposit.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
+import { useAuthStore } from '../../auth/store/authStore.js';
+import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved, hasReversalRequest } from '../../../shared/utils/reversalRequests.js';
 
 const getAccountTypeLabel = (account) => {
   const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
@@ -19,20 +21,33 @@ const getAccountTypeLabel = (account) => {
 export const Deposits = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
 
   const { accounts, transactions, loading, error, fetchAllAccounts, fetchRecentTransactions, clearError } = useClientStore();
   const [selectedAccountNumber, setSelectedAccountNumber] = useState('');
   const [useManualDestination, setUseManualDestination] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [couponCode, setCouponCode] = useState('');
   const [pendingRequests, setPendingRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [requestLoading, setRequestLoading] = useState(false);
+  const [reversalUpdates, setReversalUpdates] = useState(0);
 
   useEffect(() => {
     fetchAllAccounts();
     fetchRecentTransactions(10);
   }, [fetchAllAccounts, fetchRecentTransactions]);
+
+  useEffect(() => {
+    const onReversalUpdate = () => setReversalUpdates((prev) => prev + 1);
+    window.addEventListener('nexusbank-reversals-updated', onReversalUpdate);
+    window.addEventListener('storage', onReversalUpdate);
+    return () => {
+      window.removeEventListener('nexusbank-reversals-updated', onReversalUpdate);
+      window.removeEventListener('storage', onReversalUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -61,11 +76,12 @@ export const Deposits = () => {
   }, [accounts, location.pathname, location.state, navigate]);
 
   const recentDeposits = useMemo(() => {
+    // 1. Get history from backend
     const history = Array.isArray(transactions)
       ? transactions
           .filter((tx) => tx.type === 'DEPOSITO')
           .map((tx) => {
-            const transactionId = tx.transactionId || tx.id || tx._id || tx.reference || `${tx.date || tx.createdAt || tx.updatedAt}-${Math.random()}`;
+            const transactionId = String(tx.transactionId || tx.id || tx._id || '');
             return {
               id: transactionId,
               amount: Number(tx.amount || 0),
@@ -79,8 +95,27 @@ export const Deposits = () => {
           })
       : [];
 
-    return [...pendingRequests, ...history].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [pendingRequests, transactions]);
+    // 2. Combine with local pending requests and apply REVERTIDO status
+    return [...pendingRequests, ...history]
+      .map((item) => {
+        const transactionId = String(item.id || '');
+        const ref = String(item.reference || '');
+        
+        // A deposit is reverted if it matches an approved reversal request OR its backend status is already REVERTIDA
+        const isReverted = isReversalApproved(transactionId) || isReversalApproved(ref) || String(item.raw?.status).toUpperCase() === 'REVERTIDA';
+        
+        return {
+          ...item,
+          status: isReverted ? 'REVERTIDO' : item.status
+        };
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [pendingRequests, transactions, reversalUpdates]);
+
+  const latestReversibleTransaction = useMemo(() => getLatestReversibleTransaction(recentDeposits.map((deposit) => ({
+    ...deposit,
+    type: 'DEPOSITO',
+  }))), [recentDeposits]);
 
   const selectedDeposit = useMemo(() => {
     if (selectedRequestId) {
@@ -112,7 +147,8 @@ export const Deposits = () => {
       const payload = {
         destinationAccountNumber: selectedAccountNumber,
         amount,
-        description: description || 'Solicitud de depósito cliente'
+        description: description || 'Solicitud de depósito cliente',
+        couponCode: couponCode || undefined
       };
 
       const response = await clientDepositService.createDepositRequest(payload);
@@ -137,6 +173,7 @@ export const Deposits = () => {
       showSuccess('Solicitud de depósito enviada correctamente. Queda pendiente de aprobación.');
       setAmount('');
       setDescription('');
+      setCouponCode('');
     } catch (submitError) {
       const message = submitError.response?.data?.message || 'Error al enviar la solicitud de depósito';
       showError(message);
@@ -148,7 +185,7 @@ export const Deposits = () => {
   const buildReceiptHtml = (deposit, autoPrint = false) => {
     const amountFormatted = deposit.amount.toLocaleString('es-GT', { minimumFractionDigits: 2 });
     const dateFormatted = new Date(deposit.date).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
-    const statusLabel = deposit.status === 'PENDIENTE' ? 'PENDIENTE' : 'APROBADO';
+    const statusLabel = deposit.status === 'REVERTIDO' ? 'REVERTIDO' : (deposit.status === 'PENDIENTE' ? 'PENDIENTE' : 'APROBADO');
 
     return `<!doctype html>
 <html lang="es">
@@ -171,6 +208,7 @@ export const Deposits = () => {
     .badge { display: inline-flex; padding: 10px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
     .approved { background: #D1FAE5; color: #065F46; }
     .pending { background: #FEF3C7; color: #92400E; }
+    .reverted { background: #FEE2E2; color: #991B1B; }
     .note { margin: 24px 0 0; padding: 18px 20px; border-radius: 20px; background: #ECFDF5; color: #065F46; font-size: 14px; line-height: 1.6; }
     @media print {
       body { background: white; }
@@ -188,7 +226,7 @@ export const Deposits = () => {
         <p class="ref">REF: ${deposit.reference}</p>
       </div>
       <div class="section">
-        <div class="row"><span>Estado</span><span><span class="badge ${deposit.status === 'PENDIENTE' ? 'pending' : 'approved'}">${statusLabel}</span></span></div>
+        <div class="row"><span>Estado</span><span><span class="badge ${deposit.status === 'REVERTIDO' ? 'reverted' : (deposit.status === 'PENDIENTE' ? 'pending' : 'approved')}">${statusLabel}</span></span></div>
         <div class="row"><span>Fecha</span><span>${dateFormatted}</span></div>
         <div class="row"><span>Cuenta destino</span><span>${deposit.account}</span></div>
         <div class="row"><span>Tipo</span><span>Depósito</span></div>
@@ -301,6 +339,49 @@ export const Deposits = () => {
     setSelectedRequestId(depositId);
   };
 
+  const canReverseDeposit = (deposit) => {
+    if (!deposit || !latestReversibleTransaction || deposit.status === 'REVERTIDO') return false;
+    
+    const isTarget = String(deposit.id) === String(latestReversibleTransaction.id)
+      || String(deposit.reference) === String(latestReversibleTransaction.reference);
+      
+    if (!isTarget) return false;
+
+    // Don't show button if there is already a pending or approved request
+    return !hasReversalRequest(deposit.id) && !hasReversalRequest(deposit.reference);
+  };
+
+  const handleRequestReversal = (deposit) => {
+    if (!deposit) return;
+
+    const reason = window.prompt('Describe por qué quieres revertir este depósito:') || '';
+    if (!reason.trim()) {
+      showError('Debes escribir un motivo para enviar la reversión.');
+      return;
+    }
+
+    try {
+      addReversalRequest({
+        type: 'DEPOSITO',
+        operationId: deposit.id,
+        reference: deposit.reference,
+        amount: deposit.amount,
+        accountNumber: deposit.account,
+        operationDate: deposit.date,
+        operationDescription: deposit.description,
+        reason,
+        userId: user?.id,
+        userEmail: user?.email,
+        userName: user?.name || user?.username || null,
+      });
+
+      showSuccess('Solicitud de reversión enviada al administrador.');
+      navigate('/clientdashboard/reversions');
+    } catch (requestError) {
+      showError(requestError?.message || 'No fue posible solicitar la reversión.');
+    }
+  };
+
   return (
     <div className="animate-fade-in-up space-y-6">
       <div className="mb-6">
@@ -362,22 +443,50 @@ export const Deposits = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Descripción (opcional)</label>
-              <textarea
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:border-[#2D5899] focus:outline-none min-h-[120px]"
-                placeholder="Agrega una descripción del depósito opcional"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
+              {/* Optional Description */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-[#1A2E52]">Descripción (Opcional)</label>
+                <div className="relative group">
+                  <div className="absolute top-3 left-4 text-gray-400 group-focus-within:text-[#2D5899] transition-colors">
+                    📝
+                  </div>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Ej. Pago de servicios..."
+                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200/50 rounded-2xl focus:ring-4 focus:ring-[#2D5899]/10 focus:border-[#2D5899] transition-all resize-none h-24"
+                  />
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              disabled={requestLoading}
-              className="w-full rounded-2xl bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white font-semibold py-3 hover:shadow-lg transition disabled:opacity-60"
-            >
-              {requestLoading ? 'Enviando...' : 'Enviar Depósito'}
-            </button>
+              {/* Promo Code */}
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-[#1A2E52]">Código de Promoción (Opcional)</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#2D5899] transition-colors">
+                    🎟️
+                  </div>
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    placeholder="ID de promoción si aplica..."
+                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200/50 rounded-2xl focus:ring-4 focus:ring-[#2D5899]/10 focus:border-[#2D5899] transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={requestLoading}
+                  className="w-full rounded-2xl bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white font-semibold py-3 hover:shadow-lg transition disabled:opacity-60"
+                >
+                  {requestLoading ? 'Enviando...' : 'Enviar Depósito'}
+                </button>
+              </div>
+            </div>
           </form>
         </section>
 
@@ -419,8 +528,8 @@ export const Deposits = () => {
                         <p className="text-2xl font-bold text-[#1A2E52]">Q{item.amount.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
                         <p className="text-xs text-gray-500 mt-1">{new Date(item.date).toLocaleDateString('es-ES')} • {item.account}</p>
                       </div>
-                      <span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${item.status === 'PENDIENTE' ? 'bg-yellow-100 text-[#B45309]' : 'bg-emerald-100 text-[#047857]'}`}>
-                        {item.status === 'PENDIENTE' ? 'PENDIENTE' : 'APROBADO'}
+                      <span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${item.status === 'REVERTIDO' ? 'bg-red-100 text-red-700' : (item.status === 'PENDIENTE' ? 'bg-yellow-100 text-[#B45309]' : 'bg-emerald-100 text-[#047857]')}`}>
+                        {item.status}
                       </span>
                     </div>
 
@@ -436,16 +545,30 @@ export const Deposits = () => {
                     </div>
 
                     <div className="mt-4 flex justify-between items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectDeposit(item.id);
-                        }}
-                        className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isActive ? 'bg-[#2D5899] text-white' : 'bg-white border border-[#2D5899] text-[#2D5899] hover:bg-[#2D5899] hover:text-white'}`}
-                      >
-                        Ver
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectDeposit(item.id);
+                          }}
+                          className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isActive ? 'bg-[#2D5899] text-white' : 'bg-white border border-[#2D5899] text-[#2D5899] hover:bg-[#2D5899] hover:text-white'}`}
+                        >
+                          Ver
+                        </button>
+                        {canReverseDeposit(item) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequestReversal(item);
+                            }}
+                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
+                          >
+                            Revertir
+                          </button>
+                        )}
+                      </div>
                       {isActive && <span className="text-xs text-[#2D5899] font-semibold">Seleccionado</span>}
                     </div>
                   </article>
@@ -461,7 +584,7 @@ export const Deposits = () => {
               <div className="bg-[#183664] px-5 py-4 text-white">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm uppercase tracking-[0.2em] text-[#C8D9FF]">{selectedDeposit.status === 'PENDIENTE' ? 'Pendiente' : 'Aprobado'}</p>
+                    <p className="text-sm uppercase tracking-[0.2em] text-[#C8D9FF]">{selectedDeposit.status === 'REVERTIDO' ? 'Revertido' : (selectedDeposit.status === 'PENDIENTE' ? 'Pendiente' : 'Aprobado')}</p>
                     <p className="text-lg font-semibold">Q{selectedDeposit.amount.toLocaleString('es-GT', { minimumFractionDigits: 2 })}</p>
                   </div>
                   <div className="text-right">
@@ -494,9 +617,11 @@ export const Deposits = () => {
                   </div>
                 </div>
                 <div className="mt-5 rounded-2xl bg-[#ECFDF5] p-4 border border-[#D1FAE5] text-sm text-[#065F46]">
-                  {selectedDeposit.status === 'PENDIENTE'
-                    ? 'Depósito pendiente de aprobación. Cuando se apruebe, podrás descargar o imprimir la constancia.'
-                    : 'Depósito aprobado y procesado.'}
+                  {selectedDeposit.status === 'REVERTIDO' 
+                    ? 'Este depósito ha sido revertido por el administrador.' 
+                    : (selectedDeposit.status === 'PENDIENTE'
+                      ? 'Depósito pendiente de aprobación. Cuando se apruebe, podrás descargar o imprimir la constancia.'
+                      : 'Depósito aprobado y procesado.')}
                 </div>
                 <div className="mt-6 grid gap-3">
                   <button

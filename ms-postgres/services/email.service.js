@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import config from '../configs/config.js';
 
 dotenv.config();
 
@@ -7,6 +8,9 @@ const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT),
     secure: process.env.SMTP_PORT === '465',
+    tls: {
+        rejectUnauthorized: false
+    },
     auth: {
         user: process.env.SMTP_USERNAME,
         pass: process.env.SMTP_PASSWORD
@@ -24,9 +28,12 @@ console.log('✓ Configuración SMTP:', {
 
 export const sendEmail = async (to, subject, html) => {
     try {
+        const fromAddress = process.env.EMAIL_FROM || config.smtp.from || process.env.SMTP_USERNAME;
+        const fromName = process.env.EMAIL_FROM_NAME || 'NexusBank';
+
         console.log('→ Intentando enviar email a:', to);
         const info = await transporter.sendMail({
-            from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
+            from: `"${fromName}" <${fromAddress}>`,
             to,
             subject,
             html
@@ -46,7 +53,7 @@ export const sendEmail = async (to, subject, html) => {
 };
 
 export const sendVerificationEmail = async (email, name, token) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
     
     const html = `
         <!DOCTYPE html>
@@ -135,7 +142,7 @@ export const sendWelcomeEmail = async (email, name, accountNumber) => {
 };
 
 export const sendPasswordResetEmail = async (email, name, token) => {
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    const resetUrl = `${config.frontendUrl}/reset-password?token=${token}`;
     
     const html = `
         <!DOCTYPE html>
@@ -236,7 +243,7 @@ export const sendAccountCreatedEmail = async (email, name, accountData = {}) => 
 };
 
 export const sendAccountApprovedEmail = async (email, name, token) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
     const html = `
         <p>Hola ${name || 'cliente'},</p>
         <p>¡Excelente noticia! Tu solicitud de cuenta en NexusBank ha sido <strong>aprobada</strong>.</p>

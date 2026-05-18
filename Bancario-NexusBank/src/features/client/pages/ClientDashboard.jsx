@@ -76,6 +76,21 @@ export const ClientDashboard = () => {
   }
 
   const displayAccounts = accounts.length > 0 ? accounts : (mainAccount ? [mainAccount] : []);
+  const secondaryAccounts = displayAccounts.filter(
+    (account) => {
+      const mainId = mainAccount?.id;
+      const mainNumber = mainAccount?.accountNumber;
+      const accId = account?.id;
+      const accNumber = account?.accountNumber;
+      
+      // Excluir la cuenta principal de la lista de secundarias
+      return (mainId && mainId !== accId) || (mainNumber && mainNumber !== accNumber);
+    }
+  );
+  
+  // Obtener la cuenta principal: si mainAccount es null, usar la primera de accounts
+  const primaryAccount = mainAccount || (accounts.length > 0 ? accounts[0] : null);
+  
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
@@ -96,7 +111,7 @@ export const ClientDashboard = () => {
     }
   });
 
-  const totalBalance = mainAccount?.accountBalance || mainAccount?.balance || 0;
+  const totalBalance = primaryAccount?.accountBalance || primaryAccount?.balance || primaryAccount?.saldo || 0;
   const totalIncomes = calculatedIncomes;
   const totalExpenses = calculatedExpenses;
 
@@ -192,18 +207,24 @@ export const ClientDashboard = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
             {[
               { label: 'Mis cuentas', icon: '👤', color: 'from-blue-400 to-blue-600' },
+              { label: 'Historial', icon: '📋', color: 'from-teal-400 to-teal-600' },
               { label: 'Depositar', icon: '💰', color: 'from-indigo-400 to-indigo-600' },
               { label: 'Transferir', icon: '💸', color: 'from-blue-400 to-blue-600' },
+              { label: 'Reversiones', icon: '↩️', color: 'from-amber-400 to-amber-600' },
               { label: 'Favoritos', icon: '⭐', color: 'from-teal-400 to-teal-600' },
+              { label: 'Promociones', icon: '📣', color: 'from-teal-400 to-teal-600' },
             ].map((action) => (
               <button
                 key={action.label}
                 type="button"
                 onClick={() => {
-                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/');
+                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/accounts');
+                  if (action.label === 'Historial') return navigate('/clientdashboard/account-history');
                   if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
                   if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
+                  if (action.label === 'Reversiones') return navigate('/clientdashboard/reversions');
                   if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
+                  if (action.label === 'Promociones') return navigate('/clientdashboard/promotions');
                 }}
                 className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
               >
@@ -219,7 +240,23 @@ export const ClientDashboard = () => {
         <div className="lg:col-span-1">
           <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">Mi Cuenta</h3>
           <div className="space-y-4">
-            {displayAccounts.map((account, idx) => (
+            {/* Cuenta Principal - Fija Arriba */}
+            {primaryAccount && (
+              <div className="glass-panel rounded-2xl p-5 hover-lift cursor-pointer border-l-4 border-l-[#C8A84B] bg-gradient-to-r from-blue-50 to-transparent">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-bold text-[#1A2E52]">{getAccountTypeLabel(primaryAccount)} (Principal)</p>
+                    <p className="text-gray-500 text-sm font-mono mt-1">{primaryAccount.accountNumber || '**** **** 1234'}</p>
+                  </div>
+                  <p className="text-[#2D5899] font-bold text-xl">
+                    Q {(primaryAccount.accountBalance || primaryAccount.balance || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Cuentas Secundarias */}
+            {secondaryAccounts.length > 0 && secondaryAccounts.map((account, idx) => (
               <div
                 key={idx}
                 className="glass-panel rounded-2xl p-5 hover-lift cursor-pointer border-l-4 border-l-[#C8A84B]"
@@ -235,7 +272,8 @@ export const ClientDashboard = () => {
                 </div>
               </div>
             ))}
-            {displayAccounts.length === 0 && (
+            
+            {!primaryAccount && secondaryAccounts.length === 0 && (
               <p className="text-gray-500 text-center py-4 glass-panel rounded-2xl">No hay cuentas disponibles.</p>
             )}
           </div>
@@ -246,7 +284,10 @@ export const ClientDashboard = () => {
       <div>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-[#1A2E52]">Movimientos Recientes</h3>
-          <button className="text-[#2D5899] hover:text-[#1A2E52] font-semibold transition-colors flex items-center">
+          <button 
+            onClick={() => navigate('/clientdashboard/account-history')}
+            className="text-[#2D5899] hover:text-[#1A2E52] font-semibold transition-colors flex items-center"
+          >
             Ver historial completo <span className="ml-1">→</span>
           </button>
         </div>

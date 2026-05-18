@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './AdminLayout.jsx';
 import AdminPageHeader from './AdminPageHeader.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError } from '../../../utils/toast.js';
+import '../../../../styles/adminDashboard.css';
 
 const fetchEmployeesStats = async () => {
     const data = await adminDashboardService.getEmployeesStats();

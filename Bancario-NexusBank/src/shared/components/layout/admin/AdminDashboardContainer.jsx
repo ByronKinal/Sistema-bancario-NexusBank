@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminLayout from './AdminLayout.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { axiosAdmin } from '../../../api/api.js';
+import '../../../../styles/adminDashboard.css';
 
 // Componente Card reutilizable
 const StatCard = ({ title, value, subtitle, color = '' }) => (
@@ -17,73 +18,46 @@ export const AdminDashboardContainer = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+  const [promotions, setPromotions] = useState([]);
   const itemsPerPage = 5;
   
   const [stats, setStats] = useState({ totalUsers: 0, transactionsToday: 0, pendingAccounts: 0 });
   const [movementsData, setMovementsData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  const fetchDashboardInfo = async () => {
+    try {
+      const response = await adminDashboardService.getDashboardInfo();
+      if (response && response.data) {
+        setStats(response.data.stats || { totalUsers: 0, transactionsToday: 0, pendingAccounts: 0 });
+        setMovementsData(response.data.recentTransactions || []);
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard info:', err);
+    }
+  };
+
+  const fetchPromotions = async () => {
+    try {
+      const response = await adminDashboardService.getAdminPromotions();
+      const data = response;
+      const promoList = Array.isArray(data.data) ? data.data : (data.promotions || []);
+      setPromotions(promoList.slice(0, 3)); // Solo mostramos las 3 primeras en el widget
+    } catch (err) {
+      console.error('Error fetching promotions:', err);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [usersRes, txRes, accRes] = await Promise.all([
-          adminDashboardService.getUsers(1),
-          adminDashboardService.getTransactions(50),
-          adminDashboardService.getAccounts()
-        ]);
-
-        const transactions = Array.isArray(txRes.data) ? txRes.data : [];
-        const orderedTransactions = [...transactions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        const today = new Date();
-        const txTodayCount = orderedTransactions.filter(tx => new Date(tx.createdAt).toDateString() === today.toDateString()).length;
-        const accounts = accRes.data || [];
-
-        setStats({
-          totalUsers: usersRes.data?.meta?.total || 0,
-          transactionsToday: txTodayCount,
-          pendingAccounts: accounts.filter(acc => acc.status === false).length
-        });
-
-          const mappedTransactions = orderedTransactions.map(tx => {
-          const isPositive = !['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type);
-          return {
-            id: tx.id,
-            type: tx.type,
-            description: tx.description || tx.type,
-            userName: tx.accountInfo?.owner?.name || 'Cliente',
-            date: new Date(tx.createdAt).toLocaleString(),
-            amount: `${isPositive ? '+' : '-'}Q${Math.abs(tx.amount).toLocaleString('es-GT', { minimumFractionDigits: 2 })}`,
-            amountType: isPositive ? 'positive' : 'negative'
-          };
-        });
-        setMovementsData(mappedTransactions);
-      } catch (error) {
-        console.error('Error fetching admin data', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    fetchDashboardInfo();
+    fetchPromotions();
   }, []);
 
-  // Filtrar movimientos
-  const filteredMovements = movementsData.filter(m => {
-    const searchStr = `${m.description} ${m.userName} ${m.type}`.toLowerCase();
-    const matchSearch = searchStr.includes(searchTerm.toLowerCase());
-    
-    let matchType = false;
-    if (filterType === 'ALL') matchType = true;
-    else if (filterType === 'TRANSFERENCIA') {
-       matchType = m.type.includes('TRANSFERENCIA');
-    } else {
-       matchType = m.type === filterType;
-    }
-    
-    return matchSearch && matchType;
-  });
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
 
-  const currentMovements = filteredMovements.slice(0, itemsPerPage);
+  const currentMovements = movementsData.slice(0, itemsPerPage);
 
   const getMovementTypeLabel = (type) => {
     if (!type) return 'Movimiento';
@@ -95,15 +69,21 @@ export const AdminDashboardContainer = () => {
   };
 
   const getAmountColor = (type) => {
-    if (type === 'positive') return '#10b981';
-    if (type === 'negative') return '#ef4444';
+    if (type === 'positive' || type === 'DEPOSITO') return '#10b981';
+    if (type === 'negative' || type === 'RETIRO' || type === 'TRANSFERENCIA_ENVIADA') return '#ef4444';
     return '#fbbf24';
   };
 
-  const getStatusBadge = (amountType) => {
-    if (amountType === 'positive') return { bg: '#d1fae5', color: '#047857', text: 'Ingreso' };
-    if (amountType === 'negative') return { bg: '#fee2e2', color: '#991b1b', text: 'Egreso' };
-    return { bg: '#fef3c7', color: '#92400e', text: 'Pendiente' };
+  const getStatusBadge = (status, type) => {
+    const s = (status || '').toUpperCase();
+    
+    if (s === 'COMPLETADA' || s === 'APROBADA' || s === 'COMPLETED') {
+      return { bg: '#d1fae5', color: '#047857', text: 'Aprobado', className: 'badge-ingreso' };
+    }
+    if (s === 'RECHAZADA' || s === 'FALLIDA' || s === 'REJECTED') {
+      return { bg: '#fee2e2', color: '#991b1b', text: 'Rechazado', className: 'badge-egreso' };
+    }
+    return { bg: '#fef3c7', color: '#92400e', text: 'Pendiente', className: 'badge-pendiente' };
   };
 
   return (
@@ -122,15 +102,6 @@ export const AdminDashboardContainer = () => {
               <div className="movements-header">
                 <h3 className="movements-title">Movimientos recientes</h3>
                 <div className="filters-container">
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Buscar por usuario..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                    }}
-                  />
                   <select
                     className="filter-select"
                     value={filterType}
@@ -160,17 +131,20 @@ export const AdminDashboardContainer = () => {
                   <tbody>
                     {currentMovements && currentMovements.length > 0 ? (
                       currentMovements.map((movement) => {
-                        const badge = getStatusBadge(movement.amountType);
+                        const status = movement.status || 'PENDIENTE';
+                        const badge = getStatusBadge(status, movement.type);
+                        const isPositive = movement.type === 'DEPOSITO' || movement.type === 'TRANSFERENCIA_RECIBIDA';
+                        
                         return (
                           <tr key={movement.id}>
                             <td className="font-medium text-xs">{getMovementTypeLabel(movement.type)}</td>
                             <td>{movement.userName}</td>
-                            <td className="date-column">{movement.date}</td>
-                            <td className={`amount-${movement.amountType} whitespace-nowrap`}>
-                              {movement.amount}
+                            <td className="date-column">{new Date(movement.date).toLocaleString()}</td>
+                            <td className={`${isPositive ? 'amount-positive' : 'amount-negative'} whitespace-nowrap`}>
+                              {isPositive ? '+' : '-'} Q {movement.amount}
                             </td>
                             <td>
-                              <span className={`status-badge badge-${movement.amountType === 'positive' ? 'ingreso' : movement.amountType === 'negative' ? 'egreso' : 'pendiente'}`}>
+                              <span className={`status-badge ${badge.className}`}>
                                 {badge.text}
                               </span>
                             </td>
@@ -204,6 +178,16 @@ export const AdminDashboardContainer = () => {
                   Ir a Empleados
                 </div>
 
+                {/* Users Button */}
+                <div 
+                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)' }}
+                  onClick={() => navigate('/AdminDashboard/users')}
+                >
+                  <span className="text-xl mr-2">👥</span>
+                  Usuarios
+                </div>
+
                 {/* Pending Accounts Button */}
                 <div 
                   className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
@@ -213,42 +197,42 @@ export const AdminDashboardContainer = () => {
                   <span className="text-xl mr-2">📋</span>
                   Ir a Pendientes
                 </div>
+
+                {/* Promotions Management Button */}
+                <div 
+                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #2D5899, #1A2E52)' }}
+                  onClick={() => navigate('/AdminDashboard/promotions')}
+                >
+                  <span className="text-xl mr-2">🎁</span>
+                  Gestión de Promociones
+                </div>
               </div>
 
               {/* Promotions - Right Column */}
               <div className="promotions-section glass-panel shadow-md rounded-2xl border border-white/40 p-5">
                 <div className="promotions-header">
                   <h3 className="section-title">Promociones</h3>
-                  <a href="#" className="new-promotion-link">+ Nueva promoción</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); navigate('/AdminDashboard/promotions'); }} className="new-promotion-link">+ Gestión de promociones</a>
                 </div>
                 <ul className="promotions-list">
-                  <li className="promotion-item">
-                    <div className="promotion-content">
-                      <div className="promotion-info">
-                        <div className="promotion-name">Tasa preferencial ahorros</div>
-                        <div className="promotion-description">5% anual · Aplica cuentas nuevas</div>
-                      </div>
-                      <span className="status-badge badge-ingreso">Activa</span>
-                    </div>
-                  </li>
-                  <li className="promotion-item">
-                    <div className="promotion-content">
-                      <div className="promotion-info">
-                        <div className="promotion-name">Sin comisión transferencias</div>
-                        <div className="promotion-description">Todo mayo 2026</div>
-                      </div>
-                      <span className="status-badge badge-ingreso">Activa</span>
-                    </div>
-                  </li>
-                  <li className="promotion-item">
-                    <div className="promotion-content">
-                      <div className="promotion-info">
-                        <div className="promotion-name">Bono apertura cuenta corriente</div>
-                        <div className="promotion-description">Inicia 01 jun 2026</div>
-                      </div>
-                      <span className="status-badge" style={{ background: '#dbeafe', color: '#1e40af' }}>Próxima</span>
-                    </div>
-                  </li>
+                  {promotions.length === 0 ? (
+                    <li className="promotion-item text-gray-500">No hay promociones disponibles.</li>
+                  ) : (
+                    promotions.map((promo) => (
+                      <li key={promo._id} className="promotion-item">
+                        <div className="promotion-content">
+                          <div className="promotion-info">
+                            <div className="promotion-name">{promo.name}</div>
+                            <div className="promotion-description line-clamp-1">{promo.description || promo.promotionType.replace(/_/g, ' ')}</div>
+                          </div>
+                          <span className={`status-badge ${promo.status === 'ACTIVA' ? 'badge-ingreso' : ''}`} style={promo.status !== 'ACTIVA' ? { background: '#dbeafe', color: '#1e40af' } : {}}>
+                            {promo.status === 'ACTIVA' ? 'Activa' : promo.status.charAt(0) + promo.status.slice(1).toLowerCase()}
+                          </span>
+                        </div>
+                      </li>
+                    ))
+                  )}
                 </ul>
               </div>
             </div>

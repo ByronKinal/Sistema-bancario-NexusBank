@@ -34,19 +34,29 @@ body {
   align-items: center;
   justify-content: center;
   background: #f7f9fc;
-  padding: 24px;
+  padding: 20px;
 }
 
 .auth-frame {
-  width: min(1200px, 96vw);
+  width: min(1320px, 98vw);
   background: #edf2fa;
-  padding: 22px;
+  padding: 16px;
   box-shadow: 0 18px 45px rgba(26, 46, 82, 0.12);
 }
 
 .auth-split {
   display: flex;
-  min-height: 660px;
+  min-height: 500px;
+}
+
+.auth-split--compact {
+  min-height: 460px;
+  align-items: stretch;
+}
+
+.auth-split--forgot {
+  min-height: 500px;
+  align-items: stretch;
 }
 
 .auth-left {
@@ -55,8 +65,20 @@ body {
   color: #edf2fa;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 46px 40px;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 30px 28px 24px;
+}
+
+.auth-split--compact .auth-left {
+  padding: 24px 26px 20px;
+  gap: 14px;
+}
+
+.auth-split--forgot .auth-left {
+  width: 47%;
+  padding: 30px 28px 24px;
+  gap: 16px;
 }
 
 .auth-left-logo {
@@ -143,9 +165,9 @@ body {
 }
 
 .auth-hero {
-  margin: 0 0 22px;
-  font-size: 46px;
-  line-height: 1.08;
+  margin: 0 0 10px;
+  font-size: 38px;
+  line-height: 1.06;
   font-weight: 700;
   color: #ffffff;
 }
@@ -155,10 +177,10 @@ body {
 }
 
 .auth-copy {
-  margin: 0 0 24px;
+  margin: 0 0 14px;
   max-width: 340px;
-  font-size: 22px;
-  line-height: 1.5;
+  font-size: 18px;
+  line-height: 1.4;
 }
 
 .auth-bullets {
@@ -171,7 +193,7 @@ body {
   display: flex;
   align-items: center;
   gap: 11px;
-  margin: 0 0 11px;
+  margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
 }
@@ -186,7 +208,7 @@ body {
 }
 
 .auth-foot {
-  margin: 28px 0 0;
+  margin: 12px 0 0;
   font-size: 12px;
   opacity: 0.9;
 }
@@ -194,20 +216,34 @@ body {
 .auth-right {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: #edf2fa;
-  padding: 24px;
+  padding: 10px 20px 10px;
+}
+
+.auth-right--centered {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.auth-split--forgot .auth-card {
+  max-width: 540px;
 }
 
 .auth-card {
   width: 100%;
-  max-width: 450px;
+  max-width: 540px;
   background: #ffffff;
   border: 1px solid #cad7eb;
   border-radius: 12px;
   box-shadow: 0 8px 26px rgba(26, 46, 82, 0.08);
   padding: 30px 28px;
+}
+
+.auth-split--compact .auth-card {
+  max-width: 520px;
 }
 
 .auth-meta {

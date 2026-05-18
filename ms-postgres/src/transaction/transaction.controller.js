@@ -6,6 +6,7 @@ import { Transaction } from './transaction.model.js';
 import { TransactionAudit } from './transactionAudit.model.js';
 import { User, UserProfile } from '../user/user.model.js';
 import fraudDetectionService from '../../services/fraud-detection.service.js';
+import axios from 'axios';
 import { applyExposureRulesByRole } from '../user/services/user-masking.service.js';
 import {
     sendAccountRejectedEmail,
@@ -18,10 +19,49 @@ import {
     AUDIT_RESOURCES,
     recordAuditEvent
 } from '../../services/audit.service.js';
+import transactionService from './transaction.service.js';
+import notificationService from '../../services/notification.service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
     return Number.isFinite(amount) ? amount : NaN;
+};
+
+const getAccountBlockedResponse = (account, role = 'cuenta') => {
+    const accountStatus = String(account?.accountStatus || '').toUpperCase();
+
+    if (['FROZEN', 'SUSPENDED', 'BLOCKED'].includes(accountStatus)) {
+        return {
+            status: 423,
+            message: `La ${role} está ${accountStatus.toLowerCase()} y no puede operar`,
+            extra: {
+                status: accountStatus,
+                reason: account.frozenReason || null
+            }
+        };
+    }
+
+    if (accountStatus === 'CLOSED') {
+        return {
+            status: 400,
+            message: `La ${role} está cerrada y no puede operar`,
+            extra: {
+                status: accountStatus
+            }
+        };
+    }
+
+    if (!account?.status) {
+        return {
+            status: 400,
+            message: `La ${role} no está habilitada para operar`,
+            extra: {
+                status: accountStatus || 'INACTIVE'
+            }
+        };
+    }
+
+    return null;
 };
 
 const getUserEmailAndName = async (userId) => {
@@ -170,7 +210,8 @@ export const createTransfer = async (req, res) => {
             destinationAccountNumber,
             recipientType,
             amount,
-            description
+            description,
+            couponId
         } = req.body;
 
         if (!sourceAccountNumber || !destinationAccountNumber || !amount || !recipientType) {
@@ -212,6 +253,19 @@ export const createTransfer = async (req, res) => {
                     attemptedAmount: numericAmount,
                     maxAllowed: MAX_TRANSFER_AMOUNT
                 }
+            });
+
+            // Notificación de seguridad por monto excedido
+            await notificationService.sendFraudAlert(currentUserId, {
+              title: 'Actividad Sospechosa: Transferencia de Gran Monto',
+              message: `Se intentó realizar una transferencia por Q${numericAmount}, lo cual excede el límite de seguridad de Q${MAX_TRANSFER_AMOUNT}.`,
+              emailType: 'FRAUD',
+              emailData: {
+                alertType: 'UNUSUAL_AMOUNT',
+                severity: 'MEDIUM',
+                description: `Intento de transferencia inusual por Q${numericAmount}.`,
+                detectedAt: new Date()
+              }
             });
             
             await notifyTransferRejected(
@@ -266,33 +320,27 @@ export const createTransfer = async (req, res) => {
             });
         }
 
-        if (!sourceAccount.status || !destinationAccount.status) {
+        const sourceBlockedResponse = getAccountBlockedResponse(sourceAccount, 'cuenta origen');
+        if (sourceBlockedResponse) {
             await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, 'Transferencia rechazada: ambas cuentas deben estar activas para realizar la transferencia');
-            return res.status(400).json({
+            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: ${sourceBlockedResponse.message}. ${sourceBlockedResponse.extra?.reason || 'Por favor contacta con soporte.'}`);
+            return res.status(sourceBlockedResponse.status).json({
                 success: false,
-                message: 'Ambas cuentas deben estar activas para realizar la transferencia'
+                message: sourceBlockedResponse.message,
+                reason: sourceBlockedResponse.extra?.reason,
+                status: sourceBlockedResponse.extra?.status
             });
         }
 
-        if (sourceAccount.accountStatus === 'FROZEN' || sourceAccount.accountStatus === 'SUSPENDED' || sourceAccount.accountStatus === 'BLOCKED') {
+        const destinationBlockedResponse = getAccountBlockedResponse(destinationAccount, 'cuenta destino');
+        if (destinationBlockedResponse) {
             await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: tu cuenta está ${sourceAccount.accountStatus}. ${sourceAccount.frozenReason || 'Por favor contacta con soporte.'}`);
-            return res.status(423).json({
+            await notifyTransferRejected(sourceAccount.userId, `Transferencia rechazada: ${destinationBlockedResponse.message}`);
+            return res.status(destinationBlockedResponse.status).json({
                 success: false,
-                message: `Tu cuenta está ${sourceAccount.accountStatus.toLowerCase()}`,
-                reason: sourceAccount.frozenReason,
-                status: sourceAccount.accountStatus
-            });
-        }
-
-        if (destinationAccount.accountStatus === 'FROZEN' || destinationAccount.accountStatus === 'SUSPENDED' || destinationAccount.accountStatus === 'BLOCKED') {
-            await dbTransaction.rollback();
-            await notifyTransferRejected(sourceAccount.userId, 'Transferencia rechazada: la cuenta destino no está disponible para recibir transferencias');
-            return res.status(423).json({
-                success: false,
-                message: 'La cuenta destino no está disponible para recibir transferencias',
-                status: destinationAccount.accountStatus
+                message: destinationBlockedResponse.message,
+                status: destinationBlockedResponse.extra?.status,
+                reason: destinationBlockedResponse.extra?.reason
             });
         }
 
@@ -448,9 +496,30 @@ export const createTransfer = async (req, res) => {
         }
 
         let finalTransferAmount = numericAmount;
+        let transferBonusAmount = 0;
+
+        if (couponId && normalizedRecipientType === 'TERCERO') {
+            try {
+                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId,
+                    operationType: 'TRANSFERENCIA_RECIBIDA',
+                    amount: numericAmount
+                });
+
+                if (response.data && response.data.valid) {
+                    const couponInfo = response.data.benefit;
+                    if (couponInfo && couponInfo.type === 'CASHBACK') {
+                        transferBonusAmount = couponInfo.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating transfer coupon with ms-mongo:', err.message);
+            }
+        }
 
         const sourceNewBalance = sourceBalance - finalTransferAmount;
-        const destinationNewBalance = destinationBalance + numericAmount;
+        const destinationNewBalance = destinationBalance + numericAmount + transferBonusAmount;
 
         sourceAccount.accountBalance = sourceNewBalance.toFixed(2);
         destinationAccount.accountBalance = destinationNewBalance.toFixed(2);
@@ -467,7 +536,8 @@ export const createTransfer = async (req, res) => {
             description: transferDescription,
             balanceAfter: sourceNewBalance.toFixed(2),
             relatedAccountId: destinationAccount.id,
-            status: 'COMPLETADA'
+            status: 'COMPLETADA',
+            appliedCouponId: couponId
         }, { transaction: dbTransaction });
 
         const totalReceivedAmount = numericAmount;
@@ -476,10 +546,23 @@ export const createTransfer = async (req, res) => {
             type: 'TRANSFERENCIA_RECIBIDA',
             amount: totalReceivedAmount.toFixed(2),
             description: transferDescription,
-            balanceAfter: destinationNewBalance.toFixed(2),
+            balanceAfter: (destinationBalance + numericAmount).toFixed(2),
             relatedAccountId: sourceAccount.id,
             status: 'COMPLETADA'
         }, { transaction: dbTransaction });
+
+        if (transferBonusAmount > 0) {
+            await Transaction.create({
+                accountId: destinationAccount.id,
+                type: 'DEPOSITO',
+                amount: transferBonusAmount.toFixed(2),
+                description: 'Bono promocional por transferencia recibida',
+                balanceAfter: destinationNewBalance.toFixed(2),
+                relatedAccountId: sourceAccount.id,
+                status: 'COMPLETADA',
+                appliedCouponId: couponId
+            }, { transaction: dbTransaction });
+        }
 
         await dbTransaction.commit();
 
@@ -571,6 +654,7 @@ const createTransactionAudit = async ({
 export const revertTransfer = async (req, res) => {
     try {
         const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
 
         if (!actorUserId) {
             return res.status(401).json({ 
@@ -581,11 +665,12 @@ export const revertTransfer = async (req, res) => {
 
         const { id } = req.params;
         const reason = req.body?.reason || null;
+        const isAdmin = actorRole === 'Admin';
 
         let transfer = await Transaction.findOne({
             where: {
                 id,
-                type: 'TRANSFERENCIA_ENVIADA'
+                type: { [Op.in]: ['TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA'] }
             }
         });
 
@@ -596,9 +681,11 @@ export const revertTransfer = async (req, res) => {
             });
         }
 
-        if (transfer.accountId) {
-            const sourceAccount = await Account.findByPk(transfer.accountId);
-            if (!sourceAccount || sourceAccount.userId !== actorUserId) {
+        const isReceivedType = transfer.type === 'TRANSFERENCIA_RECIBIDA';
+
+        if (transfer.accountId && !isAdmin) {
+            const accountOfTransfer = await Account.findByPk(transfer.accountId);
+            if (!accountOfTransfer || accountOfTransfer.userId !== actorUserId) {
                 return res.status(403).json({
                     success: false,
                     message: 'No tienes permiso para revertir esta transferencia'
@@ -654,7 +741,7 @@ export const revertTransfer = async (req, res) => {
         const timeElapsedSeconds = Math.floor(timeElapsedMs / 1000);
         const FIVE_MINUTES_MS = 5 * 60 * 1000; 
 
-        if (timeElapsedMs > FIVE_MINUTES_MS) {
+        if (timeElapsedMs > FIVE_MINUTES_MS && !isAdmin) {
             await createTransactionAudit({
                 transactionId: transfer.id,
                 actorUserId,
@@ -682,7 +769,7 @@ export const revertTransfer = async (req, res) => {
             transfer = await Transaction.findOne({
                 where: {
                     id,
-                    type: 'TRANSFERENCIA_ENVIADA'
+                    type: { [Op.in]: ['TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA'] }
                 },
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
@@ -696,12 +783,16 @@ export const revertTransfer = async (req, res) => {
                 });
             }
 
-            const sourceAccount = await Account.findByPk(transfer.accountId, {
+            const isReceivedType = transfer.type === 'TRANSFERENCIA_RECIBIDA';
+            const senderAccountId = isReceivedType ? transfer.relatedAccountId : transfer.accountId;
+            const receiverAccountId = isReceivedType ? transfer.accountId : transfer.relatedAccountId;
+
+            const sourceAccount = await Account.findByPk(senderAccountId, {
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
             });
 
-            const destinationAccount = await Account.findByPk(transfer.relatedAccountId, {
+            const destinationAccount = await Account.findByPk(receiverAccountId, {
                 transaction: dbTransaction,
                 lock: dbTransaction.LOCK.UPDATE
             });
@@ -710,7 +801,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(404).json({
                     success: false,
-                    message: 'Cuenta origen no encontrada'
+                    message: 'Cuenta emisora original no encontrada'
                 });
             }
 
@@ -718,7 +809,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(404).json({
                     success: false,
-                    message: 'Cuenta destino no encontrada'
+                    message: 'Cuenta receptora original no encontrada'
                 });
             }
 
@@ -743,7 +834,7 @@ export const revertTransfer = async (req, res) => {
                 await dbTransaction.rollback();
                 return res.status(400).json({
                     success: false,
-                    message: 'La cuenta destino no tiene saldo suficiente para revertir la transferencia',
+                    message: 'La cuenta receptora no tiene saldo suficiente para revertir la transferencia',
                     currentBalance: destBalance.toFixed(2),
                     amountToRevert: transferAmount.toFixed(2)
                 });
@@ -759,9 +850,30 @@ export const revertTransfer = async (req, res) => {
             transfer.isReverted = true;
             transfer.revertedAt = now;
             transfer.revertedBy = actorUserId;
-            transfer.revertReason = reason || 'Reversión dentro de ventana de 5 minutos';
+            transfer.revertReason = reason || 'Reversión autorizada';
             transfer.description = `${transfer.description} | REVERTIDA por ${actorUserId}: ${transfer.revertReason}`;
             await transfer.save({ transaction: dbTransaction });
+
+            // Intentar marcar la transacción hermana (el otro lado de la transferencia)
+            const siblingTransaction = await Transaction.findOne({
+                where: {
+                    accountId: receiverAccountId,
+                    relatedAccountId: senderAccountId,
+                    amount: transfer.amount,
+                    type: isReceivedType ? 'TRANSFERENCIA_ENVIADA' : 'TRANSFERENCIA_RECIBIDA',
+                    status: 'COMPLETADA'
+                },
+                transaction: dbTransaction
+            });
+
+            if (siblingTransaction) {
+                siblingTransaction.status = 'REVERTIDA';
+                siblingTransaction.isReverted = true;
+                siblingTransaction.revertedAt = now;
+                siblingTransaction.revertedBy = actorUserId;
+                siblingTransaction.revertReason = 'Reversión vinculada a movimiento principal';
+                await siblingTransaction.save({ transaction: dbTransaction });
+            }
 
             const compensationTransaction = await Transaction.create(
                 {
@@ -916,111 +1028,60 @@ export const getMyAccountHistory = async (req, res) => {
 
         if (!currentUserId) {
             return res.status(401).json({ 
-                success: false, 
-                message: 'Usuario no autenticado' 
-            });
-        }
-
-        const accounts = await Account.findAll({
-            where: { userId: currentUserId },
-            attributes: ['id', 'accountNumber', 'accountBalance', 'accountType', 'status', 'createdAt'],
-            order: [['createdAt', 'DESC']]
-        });
-
-        if (!accounts || accounts.length === 0) {
-            return res.status(404).json({
                 success: false,
-                message: 'No se encontraron cuentas para este usuario'
+                code: 'UNAUTHORIZED',
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
             });
         }
 
-        const accountIds = accounts.map(acc => acc.id);
+        // Extraer parámetros de query
+        const page = req.query.page || 1;
+        const limit = req.query.limit || 10;
+        const accountId = req.query.accountId || null;
+        const type = req.query.type || null;
+        const status = req.query.status || null;
+        const startDate = req.query.startDate || null;
+        const endDate = req.query.endDate || null;
 
-        const transactions = await Transaction.findAll({
-            where: {
-                accountId: {
-                    [Op.in]: accountIds
-                }
-            },
-            attributes: [
-                'id',
-                'accountId',
-                'type',
-                'amount',
-                'description',
-                'balanceAfter',
-                'relatedAccountId',
-                'status',
-                'isReverted',
-                'revertedAt',
-                'appliedCouponId',
-                'createdAt',
-                'updatedAt'
-            ],
-            order: [['createdAt', 'DESC']]
+        // Llamar al servicio
+        const result = await transactionService.getAccountHistory(currentUserId, {
+            page,
+            limit,
+            accountId,
+            type,
+            status,
+            startDate,
+            endDate,
+            includeRelatedAccounts: true
         });
-
-        const accountsData = accounts.map(acc => ({
-            accountId: acc.id,
-            accountNumber: acc.accountNumber,
-            accountType: acc.accountType,
-            currentBalance: acc.accountBalance,
-            status: acc.status,
-            createdAt: acc.createdAt
-        }));
-
-        const transactionsData = transactions.map(trx => {
-            const transactionInfo = {
-                transactionId: trx.id,
-                accountId: trx.accountId,
-                type: trx.type,
-                amount: trx.amount,
-                description: trx.description,
-                balanceAfter: trx.balanceAfter,
-                status: trx.status,
-                date: trx.createdAt,
-                updatedAt: trx.updatedAt
-            };
-
-            if (trx.relatedAccountId) {
-                transactionInfo.relatedAccountId = trx.relatedAccountId;
-            }
-            if (trx.isReverted) {
-                transactionInfo.isReverted = true;
-                transactionInfo.revertedAt = trx.revertedAt;
-            }
-            if (trx.appliedCouponId) {
-                transactionInfo.appliedCouponId = trx.appliedCouponId;
-            }
-
-            return transactionInfo;
-        });
-
-        const totalBalance = accounts.reduce((sum, acc) => {
-            return sum + getNumericAmount(acc.accountBalance);
-        }, 0);
 
         return res.status(200).json({
             success: true,
+            code: null,
             message: 'Historial de cuenta obtenido exitosamente',
-            data: {
-                accounts: accountsData,
-                totalBalance: totalBalance.toFixed(2),
-                transactions: transactionsData,
-                summary: {
-                    totalAccounts: accounts.length,
-                    totalTransactions: transactions.length,
-                    activeAccounts: accounts.filter(acc => acc.status).length
-                }
-            }
+            data: result,
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
         console.error('Error obteniendo historial de cuenta:', error);
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Error en el servidor', 
-            error: error.message 
+        
+        if (error.message === 'Account does not belong to user') {
+            return res.status(403).json({
+                success: false,
+                code: 'FORBIDDEN',
+                message: 'No tienes acceso a esta cuenta',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            code: 'INTERNAL_ERROR',
+            message: 'Error en el servidor',
+            details: error.message,
+            timestamp: new Date().toISOString()
         });
     }
 };
@@ -1048,7 +1109,8 @@ export const getAdminTransactions = async (req, res) => {
             startDate,
             endDate,
             page = 1,
-            limit = 20
+            limit = 20,
+            search
         } = req.query;
 
         const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
@@ -1099,19 +1161,46 @@ export const getAdminTransactions = async (req, res) => {
 
         let targetAccountIds = null;
 
-        if (userId) {
-            const accountsByUser = await Account.findAll({
-                where: { userId: String(userId).trim() },
-                attributes: ['id'],
+        if (search) {
+            const searchPattern = `%${String(search).trim()}%`;
+            
+            // Paso 1: Buscar los usuarios que coinciden con el nombre o username
+            const matchingUsers = await UserProfile.findAll({
+                where: {
+                    [Op.or]: [
+                        { Name: { [Op.iLike]: searchPattern } },
+                        { Username: { [Op.iLike]: searchPattern } }
+                    ]
+                },
+                attributes: ['UserId'],
                 raw: true
             });
 
-            targetAccountIds = accountsByUser.map((account) => account.id);
+            const matchedUserIds = matchingUsers.map(u => u.UserId);
+
+            // Paso 2: Buscar las cuentas, ya sea que coincida su número o que su dueño sea uno de los usuarios encontrados
+            const accountWhereClause = {
+                [Op.or]: [
+                    { accountNumber: { [Op.iLike]: searchPattern } }
+                ]
+            };
+
+            if (matchedUserIds.length > 0) {
+                accountWhereClause[Op.or].push({ userId: { [Op.in]: matchedUserIds } });
+            }
+
+            const matchingAccounts = await Account.findAll({
+                attributes: ['id'],
+                where: accountWhereClause,
+                raw: true
+            });
+            
+            targetAccountIds = matchingAccounts.map(acc => acc.id);
 
             if (targetAccountIds.length === 0) {
                 return res.status(200).json({
                     success: true,
-                    message: 'No se encontraron cuentas para el usuario indicado',
+                    message: 'No se encontraron resultados para la búsqueda',
                     data: [],
                     pagination: {
                         page: parsedPage,
@@ -1121,11 +1210,44 @@ export const getAdminTransactions = async (req, res) => {
                     }
                 });
             }
+        }
 
+        if (userId) {
+            const accountsByUser = await Account.findAll({
+                where: { userId: String(userId).trim() },
+                attributes: ['id'],
+                raw: true
+            });
+
+            const userAccountIds = accountsByUser.map((account) => account.id);
+
+            if (targetAccountIds !== null) {
+                // Intersect search results with userId results
+                targetAccountIds = targetAccountIds.filter(id => userAccountIds.includes(id));
+            } else {
+                targetAccountIds = userAccountIds;
+            }
+
+            if (targetAccountIds.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    message: 'No se encontraron cuentas para el usuario indicado o la búsqueda combinada',
+                    data: [],
+                    pagination: {
+                        page: parsedPage,
+                        limit: parsedLimit,
+                        totalRecords: 0,
+                        totalPages: 0
+                    }
+                });
+            }
+        }
+
+        if (targetAccountIds !== null) {
             if (transactionWhere.accountId && !targetAccountIds.includes(transactionWhere.accountId)) {
                 return res.status(200).json({
                     success: true,
-                    message: 'La cuenta no pertenece al usuario indicado',
+                    message: 'La cuenta no pertenece a la búsqueda o usuario indicado',
                     data: [],
                     pagination: {
                         page: parsedPage,
@@ -1306,7 +1428,7 @@ export const getEmployeeAccountTransactions = async (req, res) => {
             id: account.id,
             accountNumber: account.accountNumber,
             accountType: account.accountType,
-            status: account.status,
+            status: account.status ? 'Activa' : 'Inactiva',
             owner: maskedOwner ? {
                 id: maskedOwner.id,
                 email: maskedOwner.email || 'N/A',
@@ -1358,10 +1480,11 @@ export const getDashboardTransactionRanking = async (req, res) => {
             });
         }
 
-        const { type, order = 'DESC', limit = 20 } = req.query;
+        const { type, order = 'DESC', limit = 20, orderBy = 'MOVEMENTS' } = req.query;
 
         const limitNumber = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
         const validOrder = ['ASC', 'DESC'].includes(order?.toUpperCase()) ? order.toUpperCase() : 'DESC';
+        const validOrderBy = ['MOVEMENTS', 'BALANCE'].includes(orderBy?.toUpperCase()) ? orderBy.toUpperCase() : 'MOVEMENTS';
 
         const validTypes = ['DEPOSITO', 'RETIRO', 'TRANSFERENCIA_ENVIADA', 'TRANSFERENCIA_RECIBIDA', 'COMPRA'];
 
@@ -1432,10 +1555,19 @@ export const getDashboardTransactionRanking = async (req, res) => {
         }));
 
         ranking.sort((a, b) => {
-            if (validOrder === 'DESC') {
-                return b.totalMovements - a.totalMovements;
+            let valA, valB;
+            if (validOrderBy === 'BALANCE') {
+                valA = parseFloat(a.accountbalance) || 0;
+                valB = parseFloat(b.accountbalance) || 0;
             } else {
-                return a.totalMovements - b.totalMovements;
+                valA = a.totalMovements;
+                valB = b.totalMovements;
+            }
+
+            if (validOrder === 'DESC') {
+                return valB - valA;
+            } else {
+                return valA - valB;
             }
         });
 

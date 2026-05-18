@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import AdminNavbar from './AdminNavbar.jsx';
 import AdminSidebar from './AdminSidebar.jsx';
 import AdminAddUserModal from './AdminAddUserModal.jsx';
-import { adminDashboardService } from '../../api/adminDashboard.service.js';
-import { showError, showSuccess } from '../../utils/toast.js';
-import '../../../styles/adminDashboard.css';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
+import { showError, showSuccess } from '../../../utils/toast.js';
+import '../../../../styles/adminDashboard.css';
 
 const PendingRequestsView = () => {
   const [requests, setRequests] = useState([]);
@@ -132,13 +132,6 @@ const PendingRequestsView = () => {
               <div className="movements-header">
                 <h3 className="movements-title">Lista de solicitudes</h3>
                 <div className="filters-container">
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Buscar por ID o Nombre..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
                   <select
                     className="filter-select"
                     value={filterStatus}

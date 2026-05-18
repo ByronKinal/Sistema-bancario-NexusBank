@@ -13,10 +13,50 @@ import {
     AUDIT_RESOURCES,
     recordAuditEvent
 } from '../../services/audit.service.js';
+import axios from 'axios';
+import { sendTransferReceivedEmail } from '../../services/email.service.js';
+import notificationService from '../../services/notification.service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
     return Number.isFinite(amount) ? amount : NaN;
+};
+
+const getDestinationAccountBlockedResponse = (account) => {
+    const accountStatus = String(account?.accountStatus || '').toUpperCase();
+
+    if (['FROZEN', 'SUSPENDED', 'BLOCKED'].includes(accountStatus)) {
+        return {
+            status: 423,
+            message: `La cuenta destino está ${accountStatus.toLowerCase()} y no puede recibir depósitos`,
+            extra: {
+                status: accountStatus,
+                reason: account.frozenReason || null
+            }
+        };
+    }
+
+    if (accountStatus === 'CLOSED') {
+        return {
+            status: 400,
+            message: 'La cuenta destino está cerrada y no puede recibir depósitos',
+            extra: {
+                status: accountStatus
+            }
+        };
+    }
+
+    if (!account?.status) {
+        return {
+            status: 400,
+            message: 'La cuenta destino no está habilitada para recibir depósitos',
+            extra: {
+                status: accountStatus || 'INACTIVE'
+            }
+        };
+    }
+
+    return null;
 };
 
 const getUserEmailAndName = async (userId) => {
@@ -155,7 +195,7 @@ export const createDepositRequest = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Usuario no autenticado' });
         }
 
-        const { destinationAccountNumber, amount, description } = req.body;
+        const { destinationAccountNumber, amount, description, couponCode } = req.body;
 
         if (!destinationAccountNumber || !amount) {
             return res.status(400).json({
@@ -183,19 +223,12 @@ export const createDepositRequest = async (req, res) => {
             });
         }
 
-        if (!destinationAccount.status) {
-            return res.status(400).json({
+        const destinationBlockedResponse = getDestinationAccountBlockedResponse(destinationAccount);
+        if (destinationBlockedResponse) {
+            return res.status(destinationBlockedResponse.status).json({
                 success: false,
-                message: 'La cuenta destino no esta activa'
-            });
-        }
-
-        if (destinationAccount.accountStatus === 'FROZEN' || destinationAccount.accountStatus === 'SUSPENDED' || destinationAccount.accountStatus === 'BLOCKED') {
-            return res.status(423).json({
-                success: false,
-                message: `La cuenta destino está ${destinationAccount.accountStatus.toLowerCase()} y no puede recibir depósitos`,
-                status: destinationAccount.accountStatus,
-                reason: destinationAccount.frozenReason
+                message: destinationBlockedResponse.message,
+                ...destinationBlockedResponse.extra
             });
         }
 
@@ -222,7 +255,8 @@ export const createDepositRequest = async (req, res) => {
             description: description || 'Solicitud de deposito por formulario de cliente',
             balanceAfter: Number(destinationAccount.accountBalance || 0).toFixed(2),
             status: 'PENDIENTE',
-            relatedAccountId: currentUserId
+            relatedAccountId: currentUserId,
+            appliedCouponId: couponCode || null
         });
 
         return res.status(201).json({
@@ -345,9 +379,10 @@ export const approveDepositRequest = async (req, res) => {
             });
         }
 
-        if (!destinationAccount.status) {
+        const destinationBlockedResponse = getDestinationAccountBlockedResponse(destinationAccount);
+        if (destinationBlockedResponse) {
             depositRequest.status = 'FALLIDA';
-            depositRequest.description = `${depositRequest.description || ''} | Rechazada: cuenta destino inactiva`;
+            depositRequest.description = `${depositRequest.description || ''} | Rechazada: cuenta destino ${String(destinationBlockedResponse.extra?.status || '').toLowerCase() || 'inactiva'}`;
             await depositRequest.save({ transaction: dbTransaction });
             await dbTransaction.commit();
 
@@ -356,13 +391,15 @@ export const approveDepositRequest = async (req, res) => {
                 await sendEmailSafe(() => sendAccountRejectedEmail(
                     destinationOwner.email,
                     destinationOwner.name,
-                    'Solicitud de depósito rechazada: cuenta destino inactiva'
+                    destinationBlockedResponse.message
                 ));
             }
 
-            return res.status(400).json({
+            return res.status(destinationBlockedResponse.status).json({
                 success: false,
-                message: 'La cuenta destino esta inactiva. Solicitud rechazada automaticamente'
+                message: `${destinationBlockedResponse.message}. Solicitud rechazada automaticamente`,
+                status: destinationBlockedResponse.extra?.status || null,
+                reason: destinationBlockedResponse.extra?.reason || null
             });
         }
 
@@ -390,12 +427,44 @@ export const approveDepositRequest = async (req, res) => {
             });
         }
 
-        const resultingBalance = accountBalance + requestAmount;
+        let cashbackAmount = 0;
+        let couponApplied = false;
+        let couponInfo = null;
+
+        if (depositRequest.appliedCouponId) {
+            try {
+                // Call ms-mongo to validate and apply the coupon
+                const mongoApiUrl = process.env.MONGO_API_URL || 'http://localhost:3006/api/v1';
+                
+                const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
+                    couponId: depositRequest.appliedCouponId,
+                    operationType: 'PRIMER_DEPOSITO',
+                    amount: requestAmount
+                });
+
+                if (response.data && response.data.valid) {
+                    couponApplied = true;
+                    couponInfo = response.data.benefit;
+                    if (couponInfo && couponInfo.type === 'CASHBACK') {
+                        cashbackAmount = couponInfo.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error validating coupon with ms-mongo:', err.message);
+                // Si falla la validación del cupón, igual pasamos el depósito sin cashback, pero lo ideal
+                // sería informarlo. Por ahora, si falla Mongo, no aplicamos cashback.
+            }
+        }
+
+        const resultingBalance = accountBalance + requestAmount + cashbackAmount;
         const finalBalance = resultingBalance;
         destinationAccount.accountBalance = finalBalance.toFixed(2);
         await destinationAccount.save({ transaction: dbTransaction });
 
         let depositDescription = depositRequest.description || 'Depósito aprobado';
+        if (couponApplied && cashbackAmount > 0) {
+            depositDescription += ` | Incluye Cashback: Q${cashbackAmount.toFixed(2)}`;
+        }
         depositDescription += ` | Aprobada por ${approverUserId}`;
 
         depositRequest.status = 'COMPLETADA';
@@ -405,9 +474,25 @@ export const approveDepositRequest = async (req, res) => {
 
         await dbTransaction.commit();
 
-        const destinationOwner = await getUserEmailAndName(destinationAccount.userId);
-        if (destinationOwner) {
-            await sendEmailSafe(() => sendDepositAlertEmail(destinationOwner.email, destinationOwner.name, {
+        // Alerta de depósito excesivo
+        const depositAmount = Number(depositRequest.amount);
+        if (depositAmount > 10000) {
+          await notificationService.sendFraudAlert(destinationAccount.userId, {
+            title: 'Depósito Excesivo Detectado',
+            message: `Se ha acreditado un depósito de Q${depositAmount.toFixed(2)} en tu cuenta ${destinationAccount.accountNumber}.`,
+            emailType: 'FRAUD',
+            emailData: {
+              alertType: 'EXCESSIVE_DEPOSIT',
+              severity: 'HIGH',
+              description: `Se detectó un depósito por un monto elevado (Q${depositAmount.toFixed(2)}).`,
+              detectedAt: new Date()
+            }
+          });
+        }
+
+        const accountOwner = await getUserEmailAndName(destinationAccount.userId);
+        if (accountOwner) {
+            await sendEmailSafe(() => sendDepositAlertEmail(accountOwner.email, accountOwner.name, {
                 accountNumber: destinationAccount.accountNumber,
                 amount: requestAmount,
                 newBalance: destinationAccount.accountBalance
@@ -418,6 +503,7 @@ export const approveDepositRequest = async (req, res) => {
             transactionId: depositRequest.id,
             accountId: destinationAccount.id,
             depositAmount: requestAmount.toFixed(2),
+            cashbackAmount: cashbackAmount > 0 ? cashbackAmount.toFixed(2) : undefined,
             newBalance: destinationAccount.accountBalance
         };
 
@@ -439,8 +525,8 @@ export const approveDepositRequest = async (req, res) => {
                 depositId: depositRequest.id,
                 accountId: destinationAccount.id,
                 amount: requestAmount.toFixed(2),
-                couponId: null,
-                cashbackAmount: '0.00'
+                couponId: couponApplied ? depositRequest.appliedCouponId : null,
+                cashbackAmount: cashbackAmount.toFixed(2)
             }
         });
 
@@ -507,6 +593,7 @@ const createTransactionAudit = async ({
 export const revertDeposit = async (req, res) => {
     try {
         const actorUserId = req.user?.id;
+        const actorRole = req.user?.role;
 
         if (!actorUserId) {
             return res.status(401).json({ 
@@ -517,6 +604,7 @@ export const revertDeposit = async (req, res) => {
 
         const { id } = req.params;
         const reason = req.body?.reason || null;
+        const isAdmin = actorRole === 'Admin';
 
         let deposit = await Deposit.findOne({
             where: {
@@ -532,21 +620,22 @@ export const revertDeposit = async (req, res) => {
             });
         }
 
-        if (deposit.status !== 'COMPLETADA') {
+        const allowedStatuses = isAdmin ? ['COMPLETADA', 'PENDIENTE'] : ['COMPLETADA'];
+        if (!allowedStatuses.includes(deposit.status)) {
             await createTransactionAudit({
                 transactionId: deposit.id,
                 actorUserId,
                 action: 'REVERT_DENIED',
                 outcome: 'DENIED',
                 previousStatus: deposit.status,
-                reason: `Depósito en estado ${deposit.status}, solo se pueden revertir depósitos completados`,
+                reason: `Depósito en estado ${deposit.status}, solo se pueden revertir depósitos completados${isAdmin ? ' o pendientes' : ''}`,
                 ipAddress: req.ip,
                 userAgent: req.headers['user-agent']
             });
 
             return res.status(400).json({
                 success: false,
-                message: 'Solo se pueden revertir depósitos completados'
+                message: `Solo se pueden revertir depósitos completados${isAdmin ? ' o pendientes' : ''}`
             });
         }
 
@@ -580,7 +669,7 @@ export const revertDeposit = async (req, res) => {
         const timeElapsedSeconds = Math.floor(timeElapsedMs / 1000);
         const ONE_MINUTE_MS = 60000;
 
-        if (timeElapsedMs > ONE_MINUTE_MS) {
+        if (timeElapsedMs > ONE_MINUTE_MS && !isAdmin) {
             await createTransactionAudit({
                 transactionId: deposit.id,
                 actorUserId,
@@ -630,9 +719,10 @@ export const revertDeposit = async (req, res) => {
 
             const depositAmount = getNumericAmount(deposit.amount);
             const currentBalance = getNumericAmount(account.accountBalance);
-            const totalToRevert = depositAmount + cashbackToRevert;
+            const isCompleted = deposit.status === 'COMPLETADA';
+            const totalToRevert = isCompleted ? (depositAmount + cashbackToRevert) : 0;
 
-            if (currentBalance < totalToRevert) {
+            if (isCompleted && currentBalance < totalToRevert) {
                 await createTransactionAudit({
                     transactionId: deposit.id,
                     actorUserId,
@@ -656,15 +746,19 @@ export const revertDeposit = async (req, res) => {
                 });
             }
 
-            const newBalance = currentBalance - totalToRevert;
-            account.accountBalance = newBalance.toFixed(2);
-            await account.save({ transaction: dbTransaction });
+            let newBalance = currentBalance;
+            if (isCompleted) {
+                newBalance = currentBalance - totalToRevert;
+                account.accountBalance = newBalance.toFixed(2);
+                await account.save({ transaction: dbTransaction });
+            }
 
+            const previousStatus = deposit.status;
             deposit.status = 'REVERTIDA';
             deposit.isReverted = true;
             deposit.revertedAt = now;
             deposit.revertedBy = actorUserId;
-            deposit.revertReason = reason || 'Reversión dentro de ventana de 1 minuto';
+            deposit.revertReason = reason || `Reversión desde estado ${previousStatus}`;
             deposit.description = `${deposit.description} | REVERTIDA por ${actorUserId}: ${deposit.revertReason}`;
             await deposit.save({ transaction: dbTransaction });
 
@@ -675,7 +769,7 @@ export const revertDeposit = async (req, res) => {
                 actorUserId,
                 action: 'REVERT_SUCCESS',
                 outcome: 'SUCCESS',
-                previousStatus: 'COMPLETADA',
+                previousStatus,
                 newStatus: 'REVERTIDA',
                 revertedAmount: totalToRevert,
                 relatedCouponId: couponId || null,
@@ -687,7 +781,8 @@ export const revertDeposit = async (req, res) => {
                     hadCoupon,
                     cashbackReverted: cashbackToRevert,
                     previousBalance: currentBalance.toFixed(2),
-                    newBalance: newBalance.toFixed(2)
+                    newBalance: newBalance.toFixed(2),
+                    wasPending: previousStatus === 'PENDIENTE'
                 }
             });
 
@@ -698,7 +793,7 @@ export const revertDeposit = async (req, res) => {
                 resource: AUDIT_RESOURCES.DEPOSIT,
                 result: 'SUCCESS',
                 beforeState: {
-                    status: 'COMPLETADA',
+                    status: previousStatus,
                     balance: currentBalance.toFixed(2)
                 },
                 afterState: {
@@ -710,7 +805,8 @@ export const revertDeposit = async (req, res) => {
                     accountId: account.id,
                     revertedAmount: totalToRevert.toFixed(2),
                     reason: deposit.revertReason,
-                    timeElapsedSeconds
+                    timeElapsedSeconds,
+                    wasPending: previousStatus === 'PENDIENTE'
                 }
             });
 
@@ -769,5 +865,175 @@ export const revertDeposit = async (req, res) => {
     }
 };
 
- 
+// Nueva función para que empleados creen depósitos sin afectar cliente
+export const createDepositRequestByEmployee = async (req, res) => {
+    try {
+        const currentUserId = req.user?.id;
+        const userRole = req.user?.role;
+
+        if (!currentUserId) {
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Usuario no autenticado' 
+            });
+        }
+
+        if (!['Employee', 'Admin'].includes(userRole)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Solo empleados y administradores pueden usar este endpoint' 
+            });
+        }
+
+        const { accountNumber, amount, description } = req.body;
+
+        if (!accountNumber || !amount) {
+            return res.status(400).json({
+                success: false,
+                message: 'Número de cuenta y monto son requeridos'
+            });
+        }
+
+        const numericAmount = getNumericAmount(amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Monto inválido'
+            });
+        }
+
+        const targetAccount = await Account.findOne({
+            where: { accountNumber }
+        });
+
+        if (!targetAccount) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cuenta destino no encontrada'
+            });
+        }
+
+        if (!targetAccount.status) {
+            return res.status(400).json({
+                success: false,
+                message: 'La cuenta destino no está activa'
+            });
+        }
+
+        if (['FROZEN', 'SUSPENDED', 'BLOCKED'].includes(targetAccount.accountStatus)) {
+            return res.status(423).json({
+                success: false,
+                message: `La cuenta está ${targetAccount.accountStatus.toLowerCase()} y no puede recibir depósitos`,
+                status: targetAccount.accountStatus
+            });
+        }
+
+        // Los depósitos de empleados van directamente a COMPLETADA sin necesidad de aprobación
+        const dbTransaction = await sequelize.transaction();
+
+        try {
+            const depositRecord = await Deposit.create({
+                accountId: targetAccount.id,
+                type: 'DEPOSITO',
+                amount: numericAmount.toFixed(2),
+                description: description || 'Depósito creado por empleado',
+                balanceAfter: (Number(targetAccount.accountBalance || 0) + numericAmount).toFixed(2),
+                status: 'COMPLETADA', // Directamente completado
+                relatedAccountId: currentUserId,
+                createdBy: currentUserId,
+                approvedBy: currentUserId,
+                approvedAt: new Date()
+            }, { transaction: dbTransaction });
+
+            // Actualizar balance de la cuenta
+            const newBalance = Number(targetAccount.accountBalance || 0) + numericAmount;
+            targetAccount.accountBalance = newBalance.toFixed(2);
+            await targetAccount.save({ transaction: dbTransaction });
+
+            // Crear audit de la transacción
+            await createTransactionAudit({
+                transactionId: depositRecord.id,
+                actorUserId: currentUserId,
+                action: 'DEPOSIT_CREATED_BY_EMPLOYEE',
+                outcome: 'SUCCESS',
+                previousStatus: null,
+                newStatus: 'COMPLETADA',
+                amount: numericAmount,
+                relatedCouponId: null,
+                reason: `Depósito creado por empleado en cuenta ${accountNumber}`,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                metadata: {
+                    previousBalance: targetAccount.accountBalance,
+                    newBalance: newBalance.toFixed(2),
+                    employeeId: currentUserId,
+                    employeeRole: userRole
+                }
+            });
+
+            await dbTransaction.commit();
+
+            // Registrar en auditoría del sistema
+            await recordAuditEvent({
+                req,
+                actorUserId: currentUserId,
+                action: AUDIT_ACTIONS.DEPOSIT_CREATION,
+                resource: AUDIT_RESOURCES.DEPOSIT,
+                result: 'SUCCESS',
+                beforeState: {
+                    balance: targetAccount.accountBalance
+                },
+                afterState: {
+                    balance: newBalance.toFixed(2)
+                },
+                metadata: {
+                    depositId: depositRecord.id,
+                    accountId: targetAccount.id,
+                    accountNumber,
+                    amount: numericAmount.toFixed(2),
+                    createdBy: userRole
+                }
+            });
+
+            // Enviar email al dueño de la cuenta (opcional)
+            const accountOwner = await getUserEmailAndName(targetAccount.userId);
+            if (accountOwner) {
+                await sendEmailSafe(() => sendDepositAlertEmail(accountOwner.email, accountOwner.name, {
+                    amount: numericAmount,
+                    accountNumber: accountNumber,
+                    newBalance: newBalance.toFixed(2),
+                    createdBy: userRole
+                }));
+            }
+
+            return res.status(201).json({
+                success: true,
+                message: 'Depósito creado exitosamente por empleado',
+                data: {
+                    transactionId: depositRecord.id,
+                    accountNumber,
+                    amount: numericAmount.toFixed(2),
+                    newBalance: newBalance.toFixed(2),
+                    status: 'COMPLETADA',
+                    createdAt: depositRecord.createdAt,
+                    createdBy: currentUserId
+                }
+            });
+
+        } catch (error) {
+            await dbTransaction.rollback();
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error creando depósito por empleado:', error);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Error en el servidor', 
+            error: error.message 
+        });
+    }
+};
+
+
 

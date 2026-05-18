@@ -26,6 +26,11 @@ import {
   sendVerificationFlowEmail,
   sendPasswordResetFlowEmail
 } from '../../services/auth/auth-mail-flow.service.js';
+import { 
+  sendAccountBlockedEmail,
+  sendFraudAlertEmail
+} from '../../services/email.service.js';
+import notificationService from '../../services/notification.service.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_RESOURCES,
@@ -33,6 +38,45 @@ import {
 } from '../../services/audit.service.js';
 
 const PASSWORD_RESET_EXPIRES_MINUTES = 60;
+
+const buildAccessTokenPayload = (user, role) => ({
+  id: user.id,
+  email: user.email,
+  role: normalizeRole(role)
+});
+
+const createAccessToken = (user, role) => jwt.sign(
+  buildAccessTokenPayload(user, role),
+  config.jwtSecret,
+  { expiresIn: config.jwtExpiresIn }
+);
+
+const createRefreshToken = (user, role) => jwt.sign(
+  {
+    ...buildAccessTokenPayload(user, role),
+    type: 'refresh'
+  },
+  config.jwtRefreshSecret,
+  { expiresIn: config.jwtRefreshExpiresIn }
+);
+
+const getTokenExpirationIso = (token) => {
+  const decoded = jwt.decode(token);
+  if (!decoded?.exp) return null;
+  return new Date(decoded.exp * 1000).toISOString();
+};
+
+const createAuthSessionPayload = (user, role) => {
+  const token = createAccessToken(user, role);
+  const refreshToken = createRefreshToken(user, role);
+
+  return {
+    token,
+    refreshToken,
+    expiresAt: getTokenExpirationIso(token),
+    refreshExpiresAt: getTokenExpirationIso(refreshToken)
+  };
+};
 
 export const login = async (req, res) => {
   const { email, password, emailOrUsername } = req.body;
@@ -50,14 +94,26 @@ export const login = async (req, res) => {
 
     if (typeof identifier === 'string' && identifier.includes('@')) {
       // it's an email
-      user = await User.findOne({ where: { email: identifier } });
+      user = await User.findOne({ 
+        where: { email: identifier },
+        include: [{ model: UserProfile, as: 'UserProfile' }]
+      });
     } else {
       // treat as username -> find profile then user (case-insensitive)
       const profile = await UserProfile.findOne({
         where: { Username: { [Op.iLike]: identifier } }
       });
-      if (profile) user = await User.findByPk(profile.UserId);
+      if (profile) {
+        user = await User.findByPk(profile.UserId, {
+          include: [{ model: UserProfile, as: 'UserProfile' }]
+        });
+      }
     }
+    
+    if (user) {
+      console.log(`[AUTH] Usuario encontrado: ${user.id}, intentos previos: ${user.failedLoginAttempts}`);
+    }
+
     if (!user) {
       await recordAuditEvent({
         req,
@@ -96,8 +152,63 @@ export const login = async (req, res) => {
       });
     }
 
+    if (user.lockUntil && user.lockUntil > new Date()) {
+      return sendError(res, {
+        status: 423,
+        code: 'AUTH_ACCOUNT_LOCKED',
+        message: 'Demasiados intentos fallidos. Intenta nuevamente en 1 minuto.'
+      });
+    }
+
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      // Incrementar intentos fallidos
+      const currentAttempts = (user.failedLoginAttempts || 0) + 1;
+      const remainingAttempts = 3 - currentAttempts;
+      
+      let message = `Contraseña incorrecta. Te queda${remainingAttempts === 1 ? '' : 'n'} ${remainingAttempts} intento${remainingAttempts === 1 ? '' : 's'}.`;
+      let lockUntil = null;
+
+      if (currentAttempts === 2) {
+        // Alerta preventiva por múltiples intentos (2)
+        console.log(`[AUTH] Enviando alerta por 2 intentos fallidos para usuario: ${user.id}`);
+        await notificationService.sendFraudAlert(user.id, {
+          title: 'Aviso de Seguridad: Intentos de Acceso',
+          message: 'Se han detectado 2 intentos fallidos de inicio de sesión en tu cuenta. Si no fuiste tú, por favor protege tu cuenta.',
+          emailType: 'FRAUD',
+          emailData: {
+            alertType: 'FAILED_LOGIN_ATTEMPTS',
+            severity: 'LOW',
+            description: 'Dos intentos fallidos consecutivos de inicio de sesión.',
+            detectedAt: new Date()
+          }
+        });
+      }
+
+      if (currentAttempts >= 3) {
+        lockUntil = new Date(Date.now() + 60 * 1000); // Bloqueo por 1 minuto
+        message = 'Demasiados intentos fallidos. Intenta nuevamente en 1 minuto.';
+        
+        console.log(`[AUTH] Bloqueando usuario ${user.id} por 1 minuto`);
+        // Notificación centralizada (App + Email)
+        await notificationService.sendFraudAlert(user.id, {
+          title: 'Cuenta Bloqueada Temporalmente',
+          message: 'Tu cuenta ha sido bloqueada tras 3 intentos fallidos de inicio de sesión.',
+          emailType: 'BLOCK',
+          emailData: {
+            blockedUntil: lockUntil,
+            failedAttempts: 3,
+            reason: 'Múltiples intentos fallidos de inicio de sesión'
+          }
+        });
+      }
+      
+      // Actualizar instancia y guardar
+      user.failedLoginAttempts = currentAttempts >= 3 ? 0 : currentAttempts;
+      user.lockUntil = lockUntil;
+      await user.save();
+      console.log(`[AUTH] Usuario ${user.id} actualizado: intentos=${user.failedLoginAttempts}, bloqueadoHasta=${user.lockUntil}`);
+
       await recordAuditEvent({
         req,
         actorUserId: user.id,
@@ -105,15 +216,22 @@ export const login = async (req, res) => {
         resource: AUDIT_RESOURCES.AUTH,
         result: 'DENIED',
         beforeState: null,
-        afterState: null,
+        afterState: { failedAttempts: currentAttempts, lockUntil: lockUntil },
         metadata: { email, reason: 'INVALID_PASSWORD' }
       });
 
       return sendError(res, {
         status: 400,
         code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
-        message: 'Credenciales invalidas'
+        message
       });
+    }
+    
+    // If login is successful, reset attempts and lock
+    if (user.failedLoginAttempts > 0 || user.lockUntil) {
+      user.failedLoginAttempts = 0;
+      user.lockUntil = null;
+      // No necesitamos save() aquí porque se hace más abajo con lastLogin
     }
 
     const userEmail = await UserEmail.findOne({ where: { userId: user.id } });
@@ -166,15 +284,7 @@ export const login = async (req, res) => {
 
     // Los admins y otros roles NO necesitan aprobación ni verificación
     
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        role: normalizeRole(roleName)
-      },
-      config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
-    );
+    const authSession = createAuthSessionPayload(user, roleName);
 
     user.lastLogin = new Date();
     await user.save();
@@ -202,7 +312,10 @@ export const login = async (req, res) => {
       status: 200,
       message: 'Login exitoso',
       data: {
-        token,
+        token: authSession.token,
+        refreshToken: authSession.refreshToken,
+        expiresAt: authSession.expiresAt,
+        refreshExpiresAt: authSession.refreshExpiresAt,
         user: {
           id: user.id,
           email: user.email,
@@ -223,6 +336,77 @@ export const login = async (req, res) => {
       metadata: { email, error: err.message }
     });
 
+    return sendError(res, {
+      status: 500,
+      code: ERROR_CODES.INTERNAL_ERROR,
+      message: 'Error en el servidor',
+      details: err.message
+    });
+  }
+};
+
+export const refreshSession = async (req, res) => {
+  try {
+    const incomingRefreshToken = req.body?.refreshToken;
+
+    if (!incomingRefreshToken) {
+      return sendError(res, {
+        status: 400,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'refreshToken es requerido'
+      });
+    }
+
+    let decoded = null;
+    try {
+      decoded = jwt.verify(incomingRefreshToken, config.jwtRefreshSecret);
+    } catch (_error) {
+      return sendError(res, {
+        status: 401,
+        code: ERROR_CODES.AUTH_REQUIRED,
+        message: 'Refresh token invalido o expirado'
+      });
+    }
+
+    if (!decoded?.id || decoded?.type !== 'refresh') {
+      return sendError(res, {
+        status: 401,
+        code: ERROR_CODES.AUTH_REQUIRED,
+        message: 'Refresh token invalido'
+      });
+    }
+
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      return sendError(res, {
+        status: 404,
+        code: ERROR_CODES.NOT_FOUND,
+        message: 'Usuario no encontrado'
+      });
+    }
+
+    if (!user.status) {
+      return sendError(res, {
+        status: 423,
+        code: ERROR_CODES.AUTH_ACCOUNT_DISABLED,
+        message: 'Cuenta desactivada'
+      });
+    }
+
+    const roleName = await getUserRoleName(user.id);
+    const authSession = createAuthSessionPayload(user, roleName);
+
+    return sendSuccess(res, {
+      status: 200,
+      message: 'Sesion refrescada exitosamente',
+      data: {
+        token: authSession.token,
+        refreshToken: authSession.refreshToken,
+        expiresAt: authSession.expiresAt,
+        refreshExpiresAt: authSession.refreshExpiresAt
+      }
+    });
+  } catch (err) {
     return sendError(res, {
       status: 500,
       code: ERROR_CODES.INTERNAL_ERROR,
@@ -340,8 +524,8 @@ export const register = async (req, res) => {
     await UserRole.create({ UserId: user.id, RoleId: clientRole.id }, { transaction });
 
     const accountNumber = await generateAccountNumber(accountType || 'ahorro');
-    const finalAccountStatus = isAdmin ? 'ACTIVE' : 'UNDER_REVIEW';
-    const finalStatus = isAdmin ? true : false;
+    const finalAccountStatus = 'ACTIVE';
+    const finalStatus = true;
     
     await Account.create({
       accountNumber,
@@ -355,10 +539,9 @@ export const register = async (req, res) => {
     await transaction.commit();
 
     // No enviar correo de verificación al crear la cuenta.
-    // La cuenta permanecerá pendiente de aprobación y el flujo de aprobación
-    // se encargará de notificar al usuario cuando su cuenta sea activada.
+    // La cuenta queda activa desde su creación y el usuario podrá usarla de inmediato.
     const response = {
-      msg: 'Usuario registrado. La cuenta está pendiente de aprobación por un administrador.',
+      msg: 'Usuario registrado. La cuenta fue creada y quedó activa.',
       emailSent: false,
       user: { id: user.id, email: user.email }
     };
