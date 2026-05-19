@@ -19,7 +19,7 @@ export const AuthPage = () => {
   return (
     <AuthContainer>
       <AuthCard
-        logoSrc="/src/assets/img/Logo.jpg"
+        logoSrc="/src/assets/animation/Sinfondo.webm"
         logoAlt="NexusBank"
         title="Bienvenido de Nuevo"
         subtitle="Ingresa a tu cuenta NexusBank"

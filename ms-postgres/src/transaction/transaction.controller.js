@@ -21,6 +21,7 @@ import {
 } from '../../services/audit.service.js';
 import transactionService from './transaction.service.js';
 import notificationService from '../../services/notification.service.js';
+import { getExchangeRate } from '../../helpers/fx-service.js';
 
 const getNumericAmount = (value) => {
     const amount = Number(value);
@@ -211,8 +212,11 @@ export const createTransfer = async (req, res) => {
             recipientType,
             amount,
             description,
-            couponId
+            couponId,
+            currency
         } = req.body;
+
+        const requestCurrency = String(currency || 'GTQ').trim().toUpperCase();
 
         if (!sourceAccountNumber || !destinationAccountNumber || !amount || !recipientType) {
             await dbTransaction.rollback();
@@ -242,15 +246,32 @@ export const createTransfer = async (req, res) => {
             });
         }
 
-        if (numericAmount > MAX_TRANSFER_AMOUNT) {
+        let baseAmount = numericAmount;
+        let appliedExchangeRate = null;
+
+        if (requestCurrency !== 'GTQ') {
+            try {
+                const fxData = await getExchangeRate(requestCurrency);
+                appliedExchangeRate = parseFloat(fxData.rate);
+                baseAmount = numericAmount / appliedExchangeRate;
+            } catch (err) {
+                await dbTransaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: `Error de FX: ${err.message || 'moneda no soportada'}`
+                });
+            }
+        }
+
+        if (requestCurrency === 'GTQ' && baseAmount > MAX_TRANSFER_AMOUNT) {
             await dbTransaction.rollback();
             
             await fraudDetectionService.recordFailedTransaction(req, currentUserId, {
                 type: 'TRANSFER',
-                amount: numericAmount,
+                amount: baseAmount,
                 reason: 'Monto excede el límite máximo',
                 metadata: { 
-                    attemptedAmount: numericAmount,
+                    attemptedAmount: baseAmount,
                     maxAllowed: MAX_TRANSFER_AMOUNT
                 }
             });
@@ -258,12 +279,12 @@ export const createTransfer = async (req, res) => {
             // Notificación de seguridad por monto excedido
             await notificationService.sendFraudAlert(currentUserId, {
               title: 'Actividad Sospechosa: Transferencia de Gran Monto',
-              message: `Se intentó realizar una transferencia por Q${numericAmount}, lo cual excede el límite de seguridad de Q${MAX_TRANSFER_AMOUNT}.`,
+              message: `Se intentó realizar una transferencia por Q${baseAmount}, lo cual excede el límite de seguridad de Q${MAX_TRANSFER_AMOUNT}.`,
               emailType: 'FRAUD',
               emailData: {
                 alertType: 'UNUSUAL_AMOUNT',
                 severity: 'MEDIUM',
-                description: `Intento de transferencia inusual por Q${numericAmount}.`,
+                description: `Intento de transferencia inusual por Q${baseAmount}.`,
                 detectedAt: new Date()
               }
             });
@@ -373,16 +394,16 @@ export const createTransfer = async (req, res) => {
             });
         }
 
-        if (sourceBalance < numericAmount) {
+        if (sourceBalance < baseAmount) {
             await dbTransaction.rollback();
             
             await fraudDetectionService.recordFailedTransaction(req, currentUserId, {
                 type: 'TRANSFER',
                 accountId: sourceAccount.id,
-                amount: numericAmount,
+                amount: baseAmount,
                 reason: 'Saldo insuficiente',
                 metadata: { 
-                    requiredAmount: numericAmount,
+                    requiredAmount: baseAmount,
                     availableBalance: sourceBalance
                 }
             });
@@ -390,7 +411,7 @@ export const createTransfer = async (req, res) => {
             await fraudDetectionService.detectFraudPatterns(req, currentUserId, {
                 type: 'TRANSFER',
                 accountId: sourceAccount.id,
-                amount: numericAmount
+                amount: baseAmount
             });
 
             await notifyTransferRejected(sourceAccount.userId, 'Transferencia rechazada: saldo insuficiente');
@@ -440,20 +461,20 @@ export const createTransfer = async (req, res) => {
         });
 
         const sourceToDestinationToday = getNumericAmount(sourceToDestinationTodayRaw || 0);
-        const sourceToDestinationAfterTransfer = sourceToDestinationToday + numericAmount;
+        const sourceToDestinationAfterTransfer = sourceToDestinationToday + baseAmount;
 
-        if (sourceToDestinationAfterTransfer > MAX_DAILY_TRANSFER_BY_DESTINATION_PAIR) {
+        if (requestCurrency === 'GTQ' && sourceToDestinationAfterTransfer > MAX_DAILY_TRANSFER_BY_DESTINATION_PAIR) {
             await dbTransaction.rollback();
 
             await fraudDetectionService.recordFailedTransaction(req, currentUserId, {
                 type: 'TRANSFER',
                 accountId: sourceAccount.id,
-                amount: numericAmount,
+                amount: baseAmount,
                 reason: 'Límite diario por destino excedido',
                 metadata: {
                     destinationAccountId: destinationAccount.id,
                     transferredToDestinationToday: sourceToDestinationToday,
-                    requestedAmount: numericAmount,
+                    requestedAmount: baseAmount,
                     dailyLimit: MAX_DAILY_TRANSFER_BY_DESTINATION_PAIR
                 }
             });
@@ -472,13 +493,13 @@ export const createTransfer = async (req, res) => {
                     transferredToDestinationToday: sourceToDestinationToday.toFixed(2),
                     dailyLimit: MAX_DAILY_TRANSFER_BY_DESTINATION_PAIR.toFixed(2),
                     remainingAvailable: availableToThisDestination.toFixed(2),
-                    requestedAmount: numericAmount.toFixed(2)
+                    requestedAmount: baseAmount.toFixed(2)
                 }
             });
         }
 
-        const sourceAfterThisTransfer = sourceTransferredToday + numericAmount;
-        if (sourceAfterThisTransfer > MAX_DAILY_TRANSFER_BY_SOURCE) {
+        const sourceAfterThisTransfer = sourceTransferredToday + baseAmount;
+        if (requestCurrency === 'GTQ' && sourceAfterThisTransfer > MAX_DAILY_TRANSFER_BY_SOURCE) {
             await dbTransaction.rollback();
             await notifyTransferRejected(
                 sourceAccount.userId,
@@ -489,13 +510,13 @@ export const createTransfer = async (req, res) => {
                 message: `Transferencia rechazada: la cuenta origen supera el limite diario de Q${MAX_DAILY_TRANSFER_BY_SOURCE}`,
                 data: {
                     transferredToday: sourceTransferredToday.toFixed(2),
-                    requestedAmount: numericAmount.toFixed(2),
+                    requestedAmount: baseAmount.toFixed(2),
                     projectedTotal: sourceAfterThisTransfer.toFixed(2)
                 }
             });
         }
 
-        let finalTransferAmount = numericAmount;
+        let finalTransferAmount = baseAmount;
         let transferBonusAmount = 0;
 
         if (couponId && normalizedRecipientType === 'TERCERO') {
@@ -504,7 +525,7 @@ export const createTransfer = async (req, res) => {
                 const response = await axios.post(`${mongoApiUrl}/catalog/internal/validate-coupon`, {
                     couponId,
                     operationType: 'TRANSFERENCIA_RECIBIDA',
-                    amount: numericAmount
+                    amount: baseAmount
                 });
 
                 if (response.data && response.data.valid) {
@@ -519,7 +540,7 @@ export const createTransfer = async (req, res) => {
         }
 
         const sourceNewBalance = sourceBalance - finalTransferAmount;
-        const destinationNewBalance = destinationBalance + numericAmount + transferBonusAmount;
+        const destinationNewBalance = destinationBalance + baseAmount + transferBonusAmount;
 
         sourceAccount.accountBalance = sourceNewBalance.toFixed(2);
         destinationAccount.accountBalance = destinationNewBalance.toFixed(2);
@@ -537,16 +558,19 @@ export const createTransfer = async (req, res) => {
             balanceAfter: sourceNewBalance.toFixed(2),
             relatedAccountId: destinationAccount.id,
             status: 'COMPLETADA',
-            appliedCouponId: couponId
+            appliedCouponId: couponId,
+            currency: requestCurrency,
+            foreignAmount: requestCurrency !== 'GTQ' ? getNumericAmount(amount).toFixed(2) : null,
+            exchangeRate: requestCurrency !== 'GTQ' ? appliedExchangeRate : null
         }, { transaction: dbTransaction });
 
-        const totalReceivedAmount = numericAmount;
+        const totalReceivedAmount = baseAmount;
         await Transaction.create({
             accountId: destinationAccount.id,
             type: 'TRANSFERENCIA_RECIBIDA',
             amount: totalReceivedAmount.toFixed(2),
             description: transferDescription,
-            balanceAfter: (destinationBalance + numericAmount).toFixed(2),
+            balanceAfter: (destinationBalance + baseAmount).toFixed(2),
             relatedAccountId: sourceAccount.id,
             status: 'COMPLETADA'
         }, { transaction: dbTransaction });
@@ -571,7 +595,7 @@ export const createTransfer = async (req, res) => {
             sourceAccountId: sourceAccount.id,
             destinationAccountId: destinationAccount.id,
             recipientType: normalizedRecipientType,
-            amount: numericAmount.toFixed(2),
+            amount: baseAmount.toFixed(2),
             sourceNewBalance: sourceNewBalance.toFixed(2),
             destinationNewBalance: destinationNewBalance.toFixed(2)
         };
@@ -591,7 +615,7 @@ export const createTransfer = async (req, res) => {
             await sendEmailSafe(() => sendTransferReceivedEmail(destinationOwner.email, destinationOwner.name, {
                 fromAccountNumber: sourceAccount.accountNumber,
                 toAccountNumber: destinationAccount.accountNumber,
-                amount: numericAmount,
+                amount: baseAmount,
                 newBalance: destinationAccount.accountBalance
             }));
         }

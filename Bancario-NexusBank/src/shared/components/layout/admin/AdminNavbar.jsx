@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../../features/auth/store/authStore.js';
-import Logo from '../../../../assets/img/Logo.jpg';
+import Logo from '../../../../assets/animation/Sinfondo.webm';
 import AdminNotifications from './AdminNotifications.jsx';
 import '../../../../styles/AdminNavbar.css';
 
@@ -166,7 +166,7 @@ const AdminNavbar = () => {
 			<header style={barStyle}>
 				{/* Logo */}
 				<div style={logoStyle}>
-					<img src={Logo} alt="NexusBank Logo" style={logoImg} />
+					<video src={Logo} autoPlay loop muted playsInline style={logoImg} />
 				</div>
 
 				{/* Right-side (replicar Navbar del cliente) */}

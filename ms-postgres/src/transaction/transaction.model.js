@@ -77,6 +77,22 @@ const Transaction = sequelize.define(
 			type: DataTypes.STRING(16),
 			allowNull: true,
 			field: 'applied_coupon_id'
+		},
+		currency: {
+			type: DataTypes.STRING(3),
+			allowNull: false,
+			defaultValue: 'GTQ',
+			field: 'currency'
+		},
+		foreignAmount: {
+			type: DataTypes.DECIMAL(10, 2),
+			allowNull: true,
+			field: 'foreign_amount'
+		},
+		exchangeRate: {
+			type: DataTypes.DECIMAL(10, 6),
+			allowNull: true,
+			field: 'exchange_rate'
 		}
 	},
 	{

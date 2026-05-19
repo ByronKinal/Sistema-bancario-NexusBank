@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../../features/auth/store/authStore.js';
-import Logo from '../../../../assets/img/Logo.jpg';
+import Logo from '../../../../assets/animation/Sinfondo.webm';
 import '../../../../styles/AdminNavbar.css';
 
 const buildAvatarSrc = (url) => {
@@ -156,7 +156,7 @@ const EmployeeNavbar = () => {
             <header style={barStyle}>
                 {/* Logo */}
                 <div style={logoStyle}>
-                    <img src={Logo} alt="NexusBank Logo" style={logoImg} />
+                    <video src={Logo} autoPlay loop muted playsInline style={logoImg} />
                 </div>
 
                 {/* User Menu */}

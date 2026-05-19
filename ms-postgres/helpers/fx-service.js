@@ -4,39 +4,8 @@ import config from '../configs/config.js';
 
 const normalizeCurrency = (value) => (value || '').trim().toUpperCase();
 
-const buildFxUrl = (baseCurrency, targetCurrency) => {
-    const baseUrl = config.fx.apiBaseUrl;
-    const apiKey = config.fx.apiKey;
-
-    if (!apiKey) {
-        throw new Error('FX_API_KEY no configurada');
-    }
-
-    return `${baseUrl}/fetch-one?from=${baseCurrency}&to=${targetCurrency}`;
-};
-
-const parseRateFromResponse = (data, targetCurrency) => {
-    if (data?.result && data.result[targetCurrency] !== undefined) {
-        return data.result[targetCurrency];
-    }
-    if (data?.rates && data.rates[targetCurrency] !== undefined) {
-        return data.rates[targetCurrency];
-    }
-    return null;
-};
-
-const parseTimestampFromResponse = (data) => {
-    if (data?.updated) {
-        return new Date(data.updated).toISOString();
-    }
-    if (data?.timestamp) {
-        return new Date(data.timestamp * 1000).toISOString();
-    }
-    return new Date().toISOString();
-};
-
 export const getExchangeRate = async (targetCurrency) => {
-    const baseCurrency = normalizeCurrency(config.fx.baseCurrency);
+    const baseCurrency = normalizeCurrency(config.fx.baseCurrency || 'GTQ');
     const normalizedTarget = normalizeCurrency(targetCurrency);
 
     if (!normalizedTarget) {
@@ -44,25 +13,23 @@ export const getExchangeRate = async (targetCurrency) => {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), config.fx.timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), config.fx.timeoutMs || 5000);
 
     try {
-        const url = buildFxUrl(baseCurrency, normalizedTarget);
-        const response = await fetch(url, {
-            signal: controller.signal,
-            headers: {
-                'X-API-Key': config.fx.apiKey
-            }
+        const response = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`, {
+            signal: controller.signal
         });
 
         if (!response.ok) {
-            throw new Error(`Error en API FX: ${response.status}`);
+            let errorText = '';
+            try { errorText = await response.text(); } catch(e) {}
+            throw new Error(`Error en API FX: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
-        const rate = parseRateFromResponse(data, normalizedTarget);
+        const rate = data?.rates?.[normalizedTarget];
 
-        if (rate === null) {
+        if (rate === undefined || rate === null) {
             throw new Error('Moneda no soportada por la API');
         }
 
@@ -70,8 +37,10 @@ export const getExchangeRate = async (targetCurrency) => {
             baseCurrency,
             targetCurrency: normalizedTarget,
             rate,
-            rateTimestamp: parseTimestampFromResponse(data)
+            rateTimestamp: new Date().toISOString()
         };
+    } catch (err) {
+        throw new Error(`Error de FX: ${err.message}`);
     } finally {
         clearTimeout(timeoutId);
     }
