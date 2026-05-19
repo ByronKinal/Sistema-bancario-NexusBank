@@ -42,6 +42,7 @@ const normalizeTransfer = (transfer, fallback = {}) => {
     status: transfer?.status || fallback.status || 'COMPLETADA',
     date: transfer?.createdAt || transfer?.date || fallback.date || new Date().toISOString(),
     balanceAfter: transfer?.balanceAfter ?? transfer?.newBalance ?? fallback.balanceAfter ?? null,
+    currency: transfer?.currency || fallback.currency || 'GTQ',
     raw: transfer || fallback.raw || null,
   };
 };
@@ -65,6 +66,9 @@ export const Transfers = () => {
   const [destinationAccountNumber, setDestinationAccountNumber] = useState('');
   const [recipientType, setRecipientType] = useState('TERCERO');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('GTQ');
+  const [isManualCurrency, setIsManualCurrency] = useState(false);
+  const [customCurrency, setCustomCurrency] = useState('');
   const [description, setDescription] = useState('');
   const [couponId, setCouponId] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
@@ -163,6 +167,7 @@ export const Transfers = () => {
               status: isReverted ? 'REVERTIDA' : (tx.status || 'COMPLETADA'),
               createdAt: tx.createdAt || tx.date || tx.updatedAt,
               balanceAfter: tx.balanceAfter ?? tx.newBalance ?? null,
+              currency: tx.currency || 'GTQ',
             });
           })
       : [];
@@ -254,7 +259,7 @@ export const Transfers = () => {
     <div class="card">
       <div class="header">
         <p class="title">Constancia de Transferencia</p>
-        <p class="amount">Q${amountFormatted}</p>
+        <p class="amount">${transfer.currency !== 'GTQ' && transfer.currency ? transfer.currency + ' ' : 'Q'}${amountFormatted}</p>
         <p class="ref">REF: ${transfer.reference}</p>
       </div>
       <div class="section">
@@ -300,7 +305,7 @@ export const Transfers = () => {
     cursorY += 30;
     doc.setFontSize(30);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Q${formatAmount(transfer.amount)}`, margin, cursorY);
+    doc.text(`${transfer.currency !== 'GTQ' && transfer.currency ? transfer.currency + ' ' : 'Q'}${formatAmount(transfer.amount)}`, margin, cursorY);
 
     cursorY += 28;
     doc.setFontSize(10);
@@ -366,7 +371,9 @@ export const Transfers = () => {
       return null;
     }
 
-    if (normalizedAmount > DAILY_TRANSFER_LIMIT) {
+    const actualCurrency = isManualCurrency ? customCurrency.toUpperCase() : currency;
+
+    if (actualCurrency === 'GTQ' && normalizedAmount > DAILY_TRANSFER_LIMIT) {
       showError('El límite permitido por transferencia es Q2,000.00.');
       return null;
     }
@@ -381,6 +388,7 @@ export const Transfers = () => {
       destinationAccountNumber,
       recipientType,
       amount: normalizedAmount,
+      currency: isManualCurrency ? customCurrency.toUpperCase() : currency,
       description: description.trim() || 'Transferencia de prueba',
       ...(couponId.trim() ? { couponId: couponId.trim() } : {})
     };
@@ -485,6 +493,8 @@ export const Transfers = () => {
       showError(requestError?.message || 'No fue posible solicitar la reversión.');
     }
   };
+
+  const currentSelectedCurrency = isManualCurrency ? customCurrency.toUpperCase() : currency;
 
   return (
     <div className="animate-fade-in-up space-y-6">
@@ -606,17 +616,51 @@ export const Transfers = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Monto a transferir</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={DAILY_TRANSFER_LIMIT}
-                    step="0.01"
-                    className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
-                    placeholder="Q0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
+                  <label className="block text-sm font-semibold text-[#1A2E52] mb-2">
+                    Monto a transferir y Moneda
+                    <button
+                      type="button"
+                      onClick={() => setIsManualCurrency(!isManualCurrency)}
+                      className="ml-2 text-xs text-[#2D5899] underline hover:text-[#1A2E52]"
+                    >
+                      {isManualCurrency ? '(Seleccionar de la lista)' : '(Otra divisa manual)'}
+                    </button>
+                  </label>
+                  <div className="flex gap-2">
+                    {isManualCurrency ? (
+                      <input
+                        type="text"
+                        maxLength="3"
+                        value={customCurrency}
+                        onChange={(e) => setCustomCurrency(e.target.value.toUpperCase())}
+                        placeholder="Ej. CLP"
+                        className="w-[100px] rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none uppercase"
+                      />
+                    ) : (
+                      <select
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="w-[100px] rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      >
+                        <option value="GTQ">GTQ</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="MXN">MXN</option>
+                        <option value="JPY">JPY</option>
+                      </select>
+                    )}
+                    <input
+                      type="number"
+                      min="1"
+                      max={currentSelectedCurrency === 'GTQ' ? DAILY_TRANSFER_LIMIT : undefined}
+                      step="0.01"
+                      className="flex-1 rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      placeholder="0.00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
@@ -678,7 +722,7 @@ export const Transfers = () => {
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Cuenta origen</span><span>{pendingTransfer.sourceAccountNumber}</span></div>
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Cuenta destino</span><span>{pendingTransfer.destinationAccountNumber}</span></div>
                   <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Tipo destinatario</span><span>{recipientTypes.find((item) => item.value === pendingTransfer.recipientType)?.label || pendingTransfer.recipientType}</span></div>
-                  <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Monto</span><span className="font-bold">Q {formatAmount(pendingTransfer.amount)}</span></div>
+                  <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Monto</span><span className="font-bold">{pendingTransfer.currency !== 'GTQ' ? `${pendingTransfer.currency} ` : 'Q '}{formatAmount(pendingTransfer.amount)}</span></div>
                   {pendingTransfer.couponId && (
                     <div className="flex justify-between gap-3 border-b border-gray-100 pb-3"><span className="font-semibold text-[#1A2E52]">Cupón Promocional</span><span className="text-[#C8A84B] font-bold">{pendingTransfer.couponId}</span></div>
                   )}
@@ -761,7 +805,7 @@ export const Transfers = () => {
               <div className="rounded-3xl overflow-hidden border border-[#E5E7EB] bg-white">
                 <div className="bg-[#183664] px-5 py-4 text-white">
                   <p className="text-xs uppercase tracking-[0.22em] text-[#C8D9FF]">Constancia de transferencia</p>
-                  <p className="text-2xl font-bold mt-2">Q {formatAmount(selectedTransfer.amount)}</p>
+                  <p className="text-2xl font-bold mt-2">{selectedTransfer.currency !== 'GTQ' && selectedTransfer.currency ? selectedTransfer.currency + ' ' : 'Q '}{formatAmount(selectedTransfer.amount)}</p>
                   <p className="text-xs text-[#C8D9FF] mt-1">REF: {selectedTransfer.reference}</p>
                 </div>
                 <div className="p-5 space-y-3 text-sm text-[#1F2937]">

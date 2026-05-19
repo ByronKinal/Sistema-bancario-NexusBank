@@ -6,7 +6,7 @@ const catalogBaseURL = import.meta.env.VITE_CATALOG_URL || 'http://localhost:300
 
 const axiosAdminBanking = axios.create({
   baseURL: adminBaseURL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,7 +14,7 @@ const axiosAdminBanking = axios.create({
 
 const axiosAdminCatalog = axios.create({
   baseURL: catalogBaseURL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },

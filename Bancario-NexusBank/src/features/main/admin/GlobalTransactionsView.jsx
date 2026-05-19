@@ -143,8 +143,8 @@ const handleDownloadPDF = () => {
         </button>
       </div>
 
-      <div className="history-controls mt-6" style={{ background: '#fff', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-        <form className="search-bar" onSubmit={handleSearchSubmit} style={{ flex: 1, maxWidth: '100%' }}>
+      <div className="history-controls mt-6" style={{ background: '#fff', padding: '16px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <form className="search-bar" onSubmit={handleSearchSubmit} style={{ flex: 1, minWidth: '220px' }}>
           <FaSearch className="search-icon" style={{ marginLeft: '10px', color: '#999' }} />
           <input
             type="text"
@@ -152,50 +152,38 @@ const handleDownloadPDF = () => {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="search-input"
-            style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '8px', border: '1px solid #ccc' }}
+            style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '8px', border: 'none', background: 'transparent' }}
           />
           <button type="submit" style={{ display: 'none' }}>Buscar</button>
         </form>
 
-        <div className="filters-grid" style={{ marginTop: '20px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-          {/* Panel 1 - Tipo */}
-          <div className="filter-group" style={{ flex: 1, minWidth: '200px' }}>
-            <label className="filter-label" style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Tipo</label>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button 
-                onClick={() => setFilters(prev => ({...prev, type: ''}))}
-                style={{ padding: '6px 12px', borderRadius: '6px', background: filters.type === '' ? '#102b55' : '#f0f0f0', color: filters.type === '' ? '#fff' : '#333' }}>
-                Todas
-              </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: '320px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+            <label className="filter-label">Tipo</label>
+            <select
+              className="filter-select"
+              value={filters.type}
+              onChange={(e) => { const v = e.target.value; const next = { ...filters, type: v }; setFilters(next); fetchTransactions(1, next); }}
+            >
+              <option value="">Todas</option>
               {TRANSACTION_TYPES.map(t => (
-                <button 
-                  key={t.value}
-                  onClick={() => setFilters(prev => ({...prev, type: t.value}))}
-                  style={{ padding: '6px 12px', borderRadius: '6px', background: filters.type === t.value ? '#102b55' : '#f0f0f0', color: filters.type === t.value ? '#fff' : '#333' }}>
-                  {t.label}
-                </button>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
-            </div>
+            </select>
           </div>
 
-          {/* Panel 2 - Estado */}
-          <div className="filter-group" style={{ flex: 1, minWidth: '300px' }}>
-            <label className="filter-label" style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>Estado</label>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button 
-                onClick={() => setFilters(prev => ({...prev, status: ''}))}
-                style={{ padding: '6px 12px', borderRadius: '6px', background: filters.status === '' ? '#102b55' : '#f0f0f0', color: filters.status === '' ? '#fff' : '#333' }}>
-                Todos
-              </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+            <label className="filter-label">Estado</label>
+            <select
+              className="filter-select"
+              value={filters.status}
+              onChange={(e) => { const v = e.target.value; const next = { ...filters, status: v }; setFilters(next); fetchTransactions(1, next); }}
+            >
+              <option value="">Todos</option>
               {TRANSACTION_STATUS.map(s => (
-                <button 
-                  key={s.value}
-                  onClick={() => setFilters(prev => ({...prev, status: s.value}))}
-                  style={{ padding: '6px 12px', borderRadius: '6px', background: filters.status === s.value ? '#102b55' : '#f0f0f0', color: filters.status === s.value ? '#fff' : '#333' }}>
-                  {s.label}
-                </button>
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
-            </div>
+            </select>
           </div>
         </div>
       </div>

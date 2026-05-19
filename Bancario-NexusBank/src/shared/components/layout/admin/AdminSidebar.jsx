@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getReversalRequests } from '../../../utils/reversalRequests.js';
+import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 
 const AdminSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingReversions, setPendingReversions] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const sidebarStyle = {
     width: 220,
     background: '#102b55',
@@ -22,7 +24,18 @@ const AdminSidebar = () => {
       setPendingReversions(pending);
     };
 
+    const loadRequests = async () => {
+      try {
+        const response = await adminDashboardService.getPendingAccountRequests();
+        const data = response?.data?.accountRequests || response?.data || response || [];
+        setPendingRequestsCount(Array.isArray(data) ? data.length : 0);
+      } catch (error) {
+        console.error('Error fetching pending requests:', error);
+      }
+    };
+
     load();
+    loadRequests();
     window.addEventListener('nexusbank-reversals-updated', load);
     window.addEventListener('storage', load);
 
@@ -33,7 +46,7 @@ const AdminSidebar = () => {
   }, []);
 
   return (
-    <aside style={sidebarStyle}>
+    <aside className="admin-sidebar" style={sidebarStyle}>
       <nav>
         <div>
           <div style={sectionTitle}>GENERAL</div>
@@ -85,7 +98,7 @@ const AdminSidebar = () => {
             style={{...item, background: location.pathname === '/AdminDashboard/requests' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/requests' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/requests' ? 700 : 400}}
             onClick={() => navigate('/AdminDashboard/requests')}
           >
-            Pendientes <span style={{marginLeft:6, background:'#f59e0b', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#0b1220'}}>3</span>
+            Pendientes <span style={{marginLeft:6, background:'#f59e0b', padding:'2px 6px', borderRadius:10, fontSize:12, color:'#0b1220'}}>{pendingRequestsCount}</span>
           </div>
           <div 
             style={{...item, background: location.pathname === '/AdminDashboard/control-accounts' ? '#0d294a' : 'transparent', color: location.pathname === '/AdminDashboard/control-accounts' ? '#fff' : '#cfe0ff', fontWeight: location.pathname === '/AdminDashboard/control-accounts' ? 700 : 400}}

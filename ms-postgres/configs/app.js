@@ -25,6 +25,7 @@ import depositEmployeeRoutes from '../src/deposit/depositEmployee.routes.js';
 import transactionRoutes from '../src/transaction/transaction.routes.js';
 import userRoutes from '../src/user/user.routes.js';
 import { editOwnProfile } from '../src/user/user.controller.js';
+import { sendEmail } from '../services/email.service.js';
 
 export const BASE_PATH = '/api/v1';
 
@@ -36,6 +37,8 @@ const PUBLIC_PATHS = [
   `${BASE_PATH}/auth/resend-verification`,
   `${BASE_PATH}/auth/forgot-password`,
   `${BASE_PATH}/auth/reset-password`
+  ,
+  `${BASE_PATH}/internal/test-email`
 ];
 
 export const createApp = () => {
@@ -94,6 +97,21 @@ export const createApp = () => {
   app.put(`${BASE_PATH}/profile/edit`, verifyTokenAndGetUser, validateEditOwnProfile, editOwnProfile);
   app.use(`${BASE_PATH}/user`, userRoutes);
   app.use(`${BASE_PATH}/users`, userRoutes);
+
+  // Endpoint interno para probar envío de correo
+  app.post(`${BASE_PATH}/internal/test-email`, async (req, res) => {
+    try {
+      const to = req.body?.to || process.env.DEV_TEST_EMAIL || process.env.SMTP_USERNAME;
+      const subject = req.body?.subject || 'NexusBank - Test Email';
+      const html = req.body?.html || `<p>Prueba de correo desde ms-postgres: ${new Date().toISOString()}</p>`;
+      const result = await sendEmail(to, subject, html);
+      if (result && result.success) return sendSuccess(res, { status: 200, message: 'Email enviado (test)', data: result });
+      return res.status(502).json({ success: false, message: 'Fallo enviando email', error: result && result.error });
+    } catch (err) {
+      console.error('Error endpoint test-email:', err);
+      return res.status(500).json({ success: false, message: 'Error interno', error: err.message });
+    }
+  });
 
   app.use(notFoundHandler);
   app.use(globalErrorHandler);

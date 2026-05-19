@@ -66,7 +66,7 @@ export const ForgotPasswordPage = () => {
   return (
     <AuthContainer mode="forgot">
       <AuthCard
-        logoSrc="/src/assets/img/Logo.jpg"
+        logoSrc="/src/assets/animation/Sinfondo.webm"
         logoAlt="NexusBank"
         title={emailSent ? 'Correo enviado' : 'Recuperar contraseña'}
         subtitle={emailSent ? 'Revisa tu bandeja y abre el enlace para crear tu nueva contraseña' : 'Ingresa tu correo para recibir un enlace seguro de restablecimiento'}
@@ -74,7 +74,7 @@ export const ForgotPasswordPage = () => {
         {emailSent ? (
           <div className="auth-sent-state">
             <div className="auth-sent-logo-wrap">
-              <img src="/src/assets/img/Logo.jpg" alt="NexusBank" className="auth-sent-logo" />
+              <video src="/src/assets/animation/Sinfondo.webm" autoPlay loop muted playsInline className="auth-sent-logo" />
             </div>
 
             <div className="auth-sent-check">✓</div>

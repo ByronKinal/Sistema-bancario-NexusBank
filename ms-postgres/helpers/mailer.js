@@ -70,7 +70,7 @@ export async function sendActivationEmail(to, subject, html, attachments = []) {
 }
 
 export async function sendVerificationEmail(to, name, token) {
-    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
+    const verificationUrl = `${config.frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
     const html = `
         <p>Hola ${name || 'cliente'},</p>
         <p>Para activar tu cuenta en NexusBank, verifica tu email:</p>
@@ -88,7 +88,7 @@ export async function sendVerificationEmail(to, name, token) {
 }
 
 export async function sendPasswordResetEmail(to, token) {
-    const resetUrl = `${config.frontendUrl}/reset-password?token=${token}`;
+    const resetUrl = `${config.frontendUrl}/#/reset-password?token=${encodeURIComponent(token)}`;
     const logoPath = path.resolve(__dirname, '../../Bancario-NexusBank/src/assets/img/Logo.jpg');
     const logoCid = 'nexusbank-logo';
     const hasLogo = fs.existsSync(logoPath);

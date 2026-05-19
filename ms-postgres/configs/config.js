@@ -10,8 +10,6 @@ export default {
     maxDailyAmountByDestination: Number(process.env.MAX_DAILY_TRANSFER_BY_DESTINATION || 2000)
   },
   fx: {
-    apiBaseUrl: process.env.FX_API_BASE_URL || 'https://api.fastforex.io',
-    apiKey: process.env.FX_API_KEY || '',
     baseCurrency: process.env.FX_BASE_CURRENCY || 'GTQ',
     timeoutMs: Number(process.env.FX_TIMEOUT_MS || 5000)
   },

@@ -39,6 +39,17 @@
   transition: all 0.2s ease;
 }
 
+/* Ensure select text is visible and not clipped */
+.filter-select {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 10px 36px 10px 12px; /* reserve arrow space */
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .filter-select:focus,
 .search-input:focus {
   outline: none;

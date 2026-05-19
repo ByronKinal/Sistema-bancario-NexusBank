@@ -655,3 +655,19 @@
   background: var(--amber-light);
   color: var(--amber-dark);
 }
+
+@media (max-width: 900px) {
+  .alv-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .alv-sidebar {
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .alv-main {
+    height: auto;
+    min-height: 500px;
+  }
+}

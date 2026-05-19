@@ -8,7 +8,7 @@ const Home = () => {
         <div className="site-navbar-inner">
           <div className="nav-left">
             <Link to="/" className="brand-link">
-              <img src="/src/assets/img/Logo.jpg" alt="NexusBank" className="brand-logo" />
+              <video src="/src/assets/animation/Sinfondo.webm" autoPlay loop muted playsInline className="brand-logo" />
               <span className="brand-name">NEXUSBANK</span>
             </Link>
           </div>
@@ -239,7 +239,7 @@ const Home = () => {
         <div className="footer-main">
           <div className="footer-brand-block">
             <Link to="/" className="footer-brand-link">
-              <img src="/src/assets/img/Logo.jpg" alt="NexusBank" className="footer-brand-logo" />
+              <video src="/src/assets/animation/Sinfondo.webm" autoPlay loop muted playsInline className="footer-brand-logo" />
               <span>NEXUSBANK</span>
             </Link>
             <p>Somos el aliado financiero de tu familia para hoy, mañana y siempre.</p>

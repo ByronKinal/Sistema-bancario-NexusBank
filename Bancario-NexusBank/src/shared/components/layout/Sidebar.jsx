@@ -32,7 +32,7 @@ export const Sidebar = () => {
   return (
     <aside className="fixed inset-y-0 left-0 w-64 glass-panel border-r z-20 hidden md:flex flex-col animate-fade-in-up">
       <div className="p-6 flex items-center justify-center border-b border-gray-200/50">
-        <img src="/src/assets/img/Logo.jpg" alt="NexusBank" className="h-10 mix-blend-multiply" />
+        <video src="/src/assets/animation/Sinfondo.webm" autoPlay loop muted playsInline className="h-10 mix-blend-multiply" />
         <span className="ml-3 text-xl font-bold text-[#1A2E52]">NexusBank</span>
       </div>
 

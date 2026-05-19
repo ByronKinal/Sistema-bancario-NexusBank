@@ -227,6 +227,18 @@
   transition: all 0.2s;
 }
 
+/* Make selects and search inputs consistent and prevent clipping */
+.filter-select,
+.search-input {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 10px 36px 10px 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .filter-select:hover,
 .filter-select:focus,
 .filter-input:hover,

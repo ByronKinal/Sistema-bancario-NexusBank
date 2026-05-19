@@ -23,8 +23,11 @@ export const getUserEmailAndName = async (userId) => {
 
 export const sendEmailSafe = async (sendFn) => {
     try {
-        await sendFn();
+        // Enviar email de forma asincrónica sin esperar (fire and forget)
+        sendFn().catch(error => {
+            console.error('Error enviando alerta por email:', error.message);
+        });
     } catch (error) {
-        console.error('Error enviando alerta por email:', error.message);
+        console.error('Error en sendEmailSafe:', error.message);
     }
 };
