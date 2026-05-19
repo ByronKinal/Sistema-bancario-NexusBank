@@ -47,7 +47,7 @@ export default function VerificationForm() {
           {/* Left Side */}
           <div className="auth-left">
             <div className="auth-left-logo">
-              <video src="/src/assets/animation/Sinfondo.webm" autoPlay loop muted playsInline style={{ width: '96px' }} />
+              <img src="/src/assets/img/Logo.jpg" alt="NexusBank" style={{ width: '96px' }} />
             </div>
             <div>
               <div className="auth-brand">NexusBank</div>

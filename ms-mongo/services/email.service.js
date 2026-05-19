@@ -46,7 +46,7 @@ export const sendEmail = async (to, subject, html) => {
 };
 
 export const sendVerificationEmail = async (email, name, token) => {
-    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const verificationUrl = `${process.env.FRONTEND_URL}/#/verify-email?token=${token}`;
     
     const html = `
         <!DOCTYPE html>
@@ -135,7 +135,7 @@ export const sendWelcomeEmail = async (email, name, accountNumber) => {
 };
 
 export const sendPasswordResetEmail = async (email, name, token) => {
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    const resetUrl = `${process.env.FRONTEND_URL}/#/reset-password?token=${token}`;
     
     const html = `
         <!DOCTYPE html>

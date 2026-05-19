@@ -92,7 +92,7 @@ export const sendEmail = async (to, subject, html) => {
 };
 
 export const sendVerificationEmail = async (email, name, token) => {
-    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
+    const verificationUrl = `${config.frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
     
     const html = `
         <!DOCTYPE html>
@@ -181,7 +181,7 @@ export const sendWelcomeEmail = async (email, name, accountNumber) => {
 };
 
 export const sendPasswordResetEmail = async (email, name, token) => {
-    const resetUrl = `${config.frontendUrl}/reset-password?token=${token}`;
+    const resetUrl = `${config.frontendUrl}/#/reset-password?token=${encodeURIComponent(token)}`;
     
     const html = `
         <!DOCTYPE html>
@@ -282,7 +282,7 @@ export const sendAccountCreatedEmail = async (email, name, accountData = {}) => 
 };
 
 export const sendAccountApprovedEmail = async (email, name, token) => {
-    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
+    const verificationUrl = `${config.frontendUrl}/#/verify-email?token=${token}`;
     const html = `
         <p>Hola ${name || 'cliente'},</p>
         <p>¡Excelente noticia! Tu solicitud de cuenta en NexusBank ha sido <strong>aprobada</strong>.</p>

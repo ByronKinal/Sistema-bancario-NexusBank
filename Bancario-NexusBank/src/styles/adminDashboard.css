@@ -498,6 +498,13 @@
   align-items: start;
 }
 
+@media (max-width: 900px) {
+  .support-control-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 .support-control-toolbar {
   display: flex;
   gap: 12px;
@@ -793,5 +800,34 @@
 
   .support-action-row {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Utilities */
+.text-center {
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .admin-container {
+    flex-direction: column;
+  }
+  .admin-sidebar {
+    width: 100% !important;
+    min-height: auto !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px !important;
+  }
+  .admin-sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+  }
+  .admin-sidebar > nav > div {
+    flex: 1;
+    min-width: 150px;
   }
 }

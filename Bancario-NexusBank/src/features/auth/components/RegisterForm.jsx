@@ -375,9 +375,6 @@ export default function RegisterForm() {
             </div>
           </form>
 
-          <div className="register-footer">
-            ¿Necesitas ayuda? <a href="#support">Contacta al soporte</a>
-          </div>
         </div>
       </AuthCard>
     </AuthContainer>

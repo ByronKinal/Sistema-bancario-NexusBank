@@ -46,7 +46,7 @@ const AdminSidebar = () => {
   }, []);
 
   return (
-    <aside style={sidebarStyle}>
+    <aside className="admin-sidebar" style={sidebarStyle}>
       <nav>
         <div>
           <div style={sectionTitle}>GENERAL</div>
