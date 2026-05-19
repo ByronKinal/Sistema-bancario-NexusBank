@@ -318,7 +318,7 @@ export const adminDashboardService = {
 
   updatePromotionStatus: async (id, status) => {
     try {
-      const response = await axiosAdminCatalog.put(`/catalog/admin/${id}/status`, { status });
+      const response = await axiosAdminCatalog.put(`/catalog/admin/${id}/status`, { newStatus: status });
       return response.data;
     } catch (error) {
       console.error('Error updating promotion status:', error);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { axiosAdmin } from '../../../api/api.js';
+import { axiosAuth } from '../../../api/api.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 
 const AdminAddUserModal = ({ onClose, onSuccess }) => {
@@ -54,7 +54,7 @@ const AdminAddUserModal = ({ onClose, onSuccess }) => {
         accountType: data.tipoCuenta
       };
 
-      await axiosAdmin.post('/admin/register', userData);
+      await axiosAuth.post('/auth/admin/register', userData);
       
       showSuccess('Usuario registrado exitosamente. Cuenta activa.');
       reset();

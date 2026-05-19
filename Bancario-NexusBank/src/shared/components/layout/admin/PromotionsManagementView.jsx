@@ -4,6 +4,7 @@ import AdminSidebar from './AdminSidebar.jsx';
 import PromotionFormModal from './PromotionFormModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
+import { MdEdit, MdPause, MdClose, MdCheck, MdPlayArrow, MdAdd, MdArrowForward } from 'react-icons/md';
 import '../../../../styles/promotions.css';
 
 const PROMOTION_TYPES = [
@@ -168,7 +169,7 @@ const PromotionsManagementView = () => {
     }
 
     try {
-      await adminDashboardService.putPromotionStatus(promotion.id || promotion._id, newStatus);
+      await adminDashboardService.updatePromotionStatus(promotion.id || promotion._id, newStatus);
       showSuccess(`Promoción ${statusLabels[newStatus].toLowerCase()} exitosamente`);
       fetchPromotions();
     } catch (error) {
@@ -213,7 +214,7 @@ const PromotionsManagementView = () => {
         className="action-btn action-btn--edit"
         title="Editar promoción"
       >
-        ✎ Editar
+        <MdEdit className="inline mr-1" /> Editar
       </button>
     );
 
@@ -226,7 +227,7 @@ const PromotionsManagementView = () => {
           className="action-btn action-btn--warning"
           title="Pausar promoción"
         >
-          ⏸ Pausar
+          <MdPause className="inline mr-1" /> Pausar
         </button>
       );
       buttons.push(
@@ -236,7 +237,7 @@ const PromotionsManagementView = () => {
           className="action-btn action-btn--danger"
           title="Desactivar promoción"
         >
-          ✕ Desactivar
+          <MdClose className="inline mr-1" /> Desactivar
         </button>
       );
     } else if (currentState === 'INACTIVA') {
@@ -247,7 +248,7 @@ const PromotionsManagementView = () => {
           className="action-btn action-btn--success"
           title="Activar promoción"
         >
-          ✓ Activar
+          <MdCheck className="inline mr-1" /> Activar
         </button>
       );
     } else if (currentState === 'PAUSADA') {
@@ -258,7 +259,7 @@ const PromotionsManagementView = () => {
           className="action-btn action-btn--success"
           title="Reanudar promoción"
         >
-          ▶ Reanudar
+          <MdPlayArrow className="inline mr-1" /> Reanudar
         </button>
       );
       buttons.push(
@@ -268,7 +269,7 @@ const PromotionsManagementView = () => {
           className="action-btn action-btn--danger"
           title="Desactivar promoción"
         >
-          ✕ Desactivar
+          <MdClose className="inline mr-1" /> Desactivar
         </button>
       );
     }
@@ -291,7 +292,7 @@ const PromotionsManagementView = () => {
                 onClick={openCreateModal}
                 className="px-6 py-3 bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
               >
-                <span>➕</span> Crear Promoción
+                <MdAdd className="text-xl" /> Crear Promoción
               </button>
             </div>
 
@@ -425,7 +426,7 @@ const PromotionsManagementView = () => {
                           </td>
                           <td>{getBenefitLabel(promo)}</td>
                           <td className="date-column text-sm">
-                            {formatDate(promo.startDate)} → {formatDate(promo.endDate)}
+                            {formatDate(promo.startDate)} <MdArrowForward className="inline mx-1 opacity-50" /> {formatDate(promo.endDate)}
                           </td>
                           <td>
                             <div className="actions-cell">

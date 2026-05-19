@@ -91,7 +91,7 @@ export const AdminDashboardContainer = () => {
       <section className="admin-section">
             {/* Stats Cards */}
             <div className="stats-grid">
-              <StatCard title="Total usuarios" value={loading ? '...' : stats.totalUsers} subtitle="+12 este mes" color="blue" />
+              <StatCard title="Total usuarios" value={loading ? '...' : stats.totalUsers} subtitle="" color="blue" />
               <StatCard title="Transacciones hoy" value={loading ? '...' : stats.transactionsToday} subtitle="Hoy" color="light-blue" />
               <StatCard title="Cuentas revertidas" value={loading ? '...' : stats.pendingAccounts} subtitle="Requieren acción" color="light-red" />
             </div>

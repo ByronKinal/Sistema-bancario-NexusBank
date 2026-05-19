@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
+import { MdAdd, MdEdit, MdClose, MdWarning, MdArrowDropDown, MdArrowRight, MdHourglassEmpty, MdCheck } from 'react-icons/md';
 
 const PROMOTION_TYPES = [
   'APERTURA_CUENTA_BONUS',
@@ -195,6 +196,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
       const payload = {};
       Object.keys(formData).forEach(key => {
         if (formData[key] !== '' && formData[key] !== null) {
+          if (mode === 'edit' && key === 'promotionType') return; // Cannot edit promotionType
           payload[key] = NUMERIC_FIELDS.has(key) ? Number(formData[key]) : formData[key];
         }
       });
@@ -259,13 +261,13 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
           <h2 style={{ color: '#fff', fontSize: 24, fontWeight: 700, margin: 0 }}>
-            {mode === 'create' ? '✚ Crear Promoción' : '✎ Editar Promoción'}
+            {mode === 'create' ? <><MdAdd className="inline mr-2" /> Crear Promoción</> : <><MdEdit className="inline mr-2" /> Editar Promoción</>}
           </h2>
           <button
             onClick={onClose}
             style={{ background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: 10, padding: '8px 12px', color: '#fff', cursor: 'pointer', fontSize: 18 }}
           >
-            ✕
+            <MdClose />
           </button>
         </div>
 
@@ -301,7 +303,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                 }}
                 placeholder="Ej: Cashback Depósitos Mayo"
               />
-              {errors.name && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.name}</div>}
+              {errors.name && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.name}</div>}
             </div>
 
             {/* Tipo de Promoción */}
@@ -333,7 +335,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   </option>
                 ))}
               </select>
-              {errors.promotionType && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.promotionType}</div>}
+              {errors.promotionType && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.promotionType}</div>}
             </div>
 
             {/* Descripción */}
@@ -385,7 +387,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   boxSizing: 'border-box'
                 }}
               />
-              {errors.startDate && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.startDate}</div>}
+              {errors.startDate && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.startDate}</div>}
             </div>
             <div>
               <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
@@ -407,7 +409,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   boxSizing: 'border-box'
                 }}
               />
-              {errors.endDate && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.endDate}</div>}
+              {errors.endDate && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.endDate}</div>}
             </div>
           </div>
 
@@ -416,7 +418,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
             <h3 style={{ color: '#C8A84B', fontSize: 14, fontWeight: 700, marginBottom: 16, textTransform: 'uppercase' }}>
               Beneficios (Mínimo 1 requerido) *
             </h3>
-            {errors.benefits && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}>⚠️ {errors.benefits}</div>}
+            {errors.benefits && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}><MdWarning className="inline mr-1" /> {errors.benefits}</div>}
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
@@ -443,7 +445,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   }}
                   placeholder="0 - 100"
                 />
-                {errors.discountPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.discountPercentage}</div>}
+                {errors.discountPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.discountPercentage}</div>}
               </div>
 
               <div>
@@ -470,7 +472,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   }}
                   placeholder="0 - 100"
                 />
-                {errors.cashbackPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.cashbackPercentage}</div>}
+                {errors.cashbackPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.cashbackPercentage}</div>}
               </div>
 
               <div>
@@ -496,7 +498,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   }}
                   placeholder="0.00"
                 />
-                {errors.cashbackAmount && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.cashbackAmount}</div>}
+                {errors.cashbackAmount && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.cashbackAmount}</div>}
               </div>
 
               <div>
@@ -522,7 +524,7 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                   }}
                   placeholder="0"
                 />
-                {errors.bonusPoints && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}>⚠️ {errors.bonusPoints}</div>}
+                {errors.bonusPoints && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.bonusPoints}</div>}
               </div>
             </div>
           </div>
@@ -548,7 +550,9 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
                 transition: 'all 0.2s'
               }}
             >
-              {expandedAdvanced ? '▼' : '▶'} Campos Avanzados
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {expandedAdvanced ? <MdArrowDropDown size={20} /> : <MdArrowRight size={20} />} Campos Avanzados
+              </span>
             </button>
 
             {expandedAdvanced && (
