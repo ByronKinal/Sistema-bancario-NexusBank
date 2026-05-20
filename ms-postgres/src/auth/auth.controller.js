@@ -100,9 +100,9 @@ export const login = async (req, res) => {
         include: [{ model: UserProfile, as: 'UserProfile' }]
       });
     } else {
-      // treat as username -> find profile then user (case-insensitive)
+      // treat as username -> find profile then user (case-sensitive)
       const profile = await UserProfile.findOne({
-        where: { Username: { [Op.iLike]: identifier } }
+        where: { Username: { [Op.like]: identifier } }
       });
       if (profile) {
         user = await User.findByPk(profile.UserId, {
