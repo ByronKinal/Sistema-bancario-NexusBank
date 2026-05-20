@@ -281,7 +281,7 @@ async function sendBlockingNotificationEmail(userId, blockedUntil, failedAttempt
     await sendAccountBlockedEmail(userInfo.email, userInfo.name, {
       blockedUntil,
       failedAttempts,
-      reason: 'Múltiples intentos fallidos de operaciones monetarias'
+      reason: 'Múltiples intentos fallidos de operaciones corriente'
     });
 
     console.log(`[EMAIL] Notificación de bloqueo enviada a ${userInfo.email}`);

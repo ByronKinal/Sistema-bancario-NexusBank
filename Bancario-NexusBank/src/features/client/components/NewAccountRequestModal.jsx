@@ -44,8 +44,8 @@ const NewAccountRequestModal = ({ visible, onClose, defaultUserId }) => {
         <div className="modal-row">
           <label>Tipo de cuenta</label>
           <select value={accountType} onChange={(e) => setAccountType(e.target.value)}>
-            <option value="ahorro">Cuenta de Ahorros</option>
-            <option value="corriente">Cuenta Corriente</option>
+            <option value="AHORRO">Cuenta de Ahorros</option>
+            <option value="CORRIENTE">Cuenta Corriente</option>
           </select>
         </div>
 

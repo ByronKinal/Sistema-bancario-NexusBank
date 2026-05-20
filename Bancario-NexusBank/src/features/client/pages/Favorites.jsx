@@ -172,17 +172,7 @@ const Favorites = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Tipo de cuenta</label>
-              <select
-                value={form.accountType}
-                onChange={(e) => setForm((prev) => ({ ...prev, accountType: e.target.value }))}
-                className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
-              >
-                <option value="ahorro">ahorro</option>
-                <option value="corriente">corriente</option>
-              </select>
-            </div>
+ 
 
             <div>
               <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Alias</label>

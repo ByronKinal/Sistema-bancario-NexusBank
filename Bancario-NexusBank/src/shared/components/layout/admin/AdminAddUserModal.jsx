@@ -27,7 +27,7 @@ const AdminAddUserModal = ({ onClose, onSuccess }) => {
       confirmarContrasena: '',
       trabajo: '',
       ingresos: '',
-      tipoCuenta: 'MONETARIA'
+      tipoCuenta: 'CORRIENTE'
     }
   });
 
@@ -215,9 +215,8 @@ const AdminAddUserModal = ({ onClose, onSuccess }) => {
                   {...register('tipoCuenta', { required: 'Requerido' })}
                 >
                   <option value="AHORRO">Cuenta de Ahorro</option>
-                  <option value="MONETARIA">Cuenta Monetaria</option>
-                  <option value="AHORRO_PROGRAMADO">Ahorro Programado</option>
-                  <option value="INFANTIL">Cuenta Infantil</option>
+                  <option value="CORRIENTE">Cuenta Corriente</option>
+
                 </select>
                 {errors.tipoCuenta && <span className="text-red-500 text-xs">{errors.tipoCuenta.message}</span>}
               </div>

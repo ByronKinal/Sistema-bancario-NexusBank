@@ -430,15 +430,7 @@ const EmployeDashnoardContainer = () => {
                                     className="w-full p-2 border rounded mb-3"
                                 />
 
-                                <label className="block text-sm font-semibold mb-1">Tipo de Cuenta</label>
-                                <select
-                                    value={newAccountType}
-                                    onChange={(e) => setNewAccountType(e.target.value)}
-                                    className="w-full p-2 border rounded mb-3"
-                                >
-                                    <option value="ahorro">Ahorro</option>
-                                    <option value="corriente">Corriente</option>
-                                </select>
+                                
 
                                     <label className="block text-sm font-semibold mb-1">Monto</label>
                                     <input

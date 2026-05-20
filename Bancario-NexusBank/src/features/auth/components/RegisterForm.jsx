@@ -32,7 +32,7 @@ export default function RegisterForm() {
       confirmarContrasena: '',
       trabajo: '',
       ingresos: '',
-      tipoCuenta: 'Ahorros',
+      tipoCuenta: 'AHORRO',
       terms: false
     }
   });
@@ -305,8 +305,8 @@ export default function RegisterForm() {
                         required: 'Selecciona un tipo de cuenta'
                       })}
                     >
-                      <option value="Ahorros">Cuenta de Ahorros</option>
-                      <option value="Corriente">Cuenta Corriente</option>
+                      <option value="AHORRO">Cuenta de Ahorros</option>
+                      <option value="CORRIENTE">Cuenta Corriente</option>
                     </select>
                     {errors.tipoCuenta && <span className="form-error">{errors.tipoCuenta.message}</span>}
                   </div>

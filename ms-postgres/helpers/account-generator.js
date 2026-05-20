@@ -24,7 +24,6 @@ const getAccountTypeCode = (accountType = 'ahorro') => {
     const typeCodes = {
         'ahorro': '001',
         'corriente': '002',
-        'monetaria': '003',
         'plazo': '004'
     };
     return typeCodes[accountType.toLowerCase()] || '001';

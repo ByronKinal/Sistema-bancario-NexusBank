@@ -438,7 +438,7 @@ export const sendAccountBlockedEmail = async (email, name, blockData = {}) => {
                     
                     <h3>Detalles del Bloqueo:</h3>
                     <ul>
-                        <li><strong>Razón:</strong> ${reason || 'Múltiples intentos fallidos de operaciones monetarias'}</li>
+                        <li><strong>Razón:</strong> ${reason || 'Múltiples intentos fallidos de operaciones corriente'}</li>
                         <li><strong>Intentos fallidos:</strong> ${failedAttempts || '3'}</li>
                         <li><strong>Bloqueado hasta:</strong> ${blockedTime}</li>
                         <li><strong>Duración:</strong> 30 minutos</li>
@@ -448,7 +448,7 @@ export const sendAccountBlockedEmail = async (email, name, blockData = {}) => {
                         <h3>¿Qué hacer?</h3>
                         <p>Tu cuenta estará disponible nuevamente después del tiempo indicado. Mientras tanto:</p>
                         <ul>
-                            <li>No intentes realizar más operaciones monetarias</li>
+                            <li>No intentes realizar más operaciones corriente</li>
                             <li>Revisa tus intentos fallidos en la sección de seguridad</li>
                             <li>Si esto fue sospechoso, <strong>cambia tu contraseña inmediatamente</strong></li>
                             <li>Contacta a soporte si crees que esto fue un error</li>
