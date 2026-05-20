@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminLayout from './AdminLayout.jsx';
 import AdminPageHeader from './AdminPageHeader.jsx';
 import { getReversalRequests, updateReversalRequest } from '../../../utils/reversalRequests.js';
+import ConfirmModal from '../../ConfirmModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 
@@ -21,11 +22,49 @@ const statusClass = (status) => {
   return 'badge-pendiente';
 };
 
+const normalizeBackendStatus = (status) => {
+  const normalized = String(status || '').toUpperCase();
+  if (normalized === 'APROBADA' || normalized === 'APPROVED' || normalized === 'COMPLETED') return 'COMPLETADA';
+  if (normalized === 'PENDING' || normalized === 'PENDIENTE') return 'PENDIENTE';
+  if (normalized === 'REVERTIDA' || normalized === 'REVERTIDO' || normalized === 'REVERSED') return 'REVERTIDA';
+  if (normalized === 'RECHAZADA' || normalized === 'REJECTED' || normalized === 'FAILED') return 'FALLIDA';
+  return normalized;
+};
+
 const ReversionsManagementView = () => {
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  // Confirm modal state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmShowInput, setConfirmShowInput] = useState(false);
+  const [confirmInputPlaceholder, setConfirmInputPlaceholder] = useState('');
+  const [confirmAction, setConfirmAction] = useState(() => async () => {});
+  const [operationStatusMap, setOperationStatusMap] = useState({});
+
+  const loadOperationStatuses = async () => {
+    try {
+      const response = await adminDashboardService.getGlobalTransactions({ limit: 500 });
+      const records = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+      const nextMap = {};
+
+      records.forEach((record) => {
+        const status = normalizeBackendStatus(record?.status);
+        const keys = [record?.id, record?.transactionId, record?.reference].filter(Boolean).map((value) => String(value).trim());
+
+        keys.forEach((key) => {
+          if (key) nextMap[key] = status;
+        });
+      });
+
+      setOperationStatusMap(nextMap);
+    } catch {
+      setOperationStatusMap({});
+    }
+  };
 
   const load = () => {
     const next = getReversalRequests();
@@ -34,6 +73,7 @@ const ReversionsManagementView = () => {
 
   useEffect(() => {
     load();
+    loadOperationStatuses();
 
     const onUpdated = () => load();
     const onStorage = () => load();
@@ -71,41 +111,72 @@ const ReversionsManagementView = () => {
     });
   }, [items, search, statusFilter, typeFilter]);
 
+  const getOperationStatus = (item) => {
+    const key = String(item?.operationId || item?.reference || '').trim();
+    return normalizeBackendStatus(operationStatusMap[key]);
+  };
+
+  const canApproveDeposit = (item) => {
+    if (String(item?.type || '').toUpperCase() !== 'DEPOSITO') return true;
+
+    const status = getOperationStatus(item);
+    return status === 'COMPLETADA' || status === 'PENDIENTE';
+  };
+
   const handleResolve = async (item, nextStatus) => {
     if (!item || String(item.status).toUpperCase() !== 'PENDING') return;
 
-    const comment = window.prompt(
-      nextStatus === 'APPROVED'
-        ? 'Comentario para aprobar la reversión (opcional):'
-        : 'Motivo de rechazo de la reversión:'
-    ) || '';
+    // Open confirm modal with optional input for admin comment
+    const title = nextStatus === 'APPROVED' ? 'Aprobar reversión' : 'Rechazar reversión';
+    const message = nextStatus === 'APPROVED'
+      ? 'Agrega un comentario opcional para la aprobación (opcional):'
+      : 'Indica el motivo del rechazo de la reversión:';
 
-    if (nextStatus === 'REJECTED' && !comment.trim()) {
-      showError('Debes escribir un motivo de rechazo.');
-      return;
-    }
-
-    if (nextStatus === 'APPROVED') {
-      try {
-        if (item.type === 'TRANSFERENCIA') {
-          await adminDashboardService.revertTransfer(item.operationId, { reason: item.reason });
-        } else if (item.type === 'DEPOSITO') {
-          await adminDashboardService.rejectDeposit(item.operationId);
-        }
-      } catch (err) {
-        showError(err.response?.data?.message || 'Error al procesar la reversión en el servidor.');
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmShowInput(true);
+    setConfirmInputPlaceholder(nextStatus === 'APPROVED' ? 'Comentario (opcional)' : 'Motivo (requerido)');
+    setConfirmAction(() => async (comment) => {
+      const normalizedComment = String(comment || '').trim();
+      if (nextStatus === 'REJECTED' && !normalizedComment) {
+        showError('Debes escribir un motivo de rechazo.');
         return;
       }
-    }
 
-    updateReversalRequest(item.id, {
-      status: nextStatus,
-      adminComment: comment.trim() || null,
-      resolvedAt: new Date().toISOString(),
+      if (nextStatus === 'APPROVED') {
+        if (item.type === 'DEPOSITO' && !canApproveDeposit(item)) {
+          showError('Ese depósito ya no está en un estado reversible para el backend.');
+          return;
+        }
+
+        try {
+          const payload = { adminComment: normalizedComment || null };
+          if (item.type === 'TRANSFERENCIA') {
+            // include original user reason if present
+            if (item.reason) payload.reason = item.reason;
+            await adminDashboardService.revertTransfer(item.operationId, payload);
+          } else if (item.type === 'DEPOSITO') {
+            // call revert deposit endpoint with admin comment
+            if (item.reason) payload.reason = item.reason;
+            await adminDashboardService.revertDeposit(item.operationId, payload);
+          }
+        } catch (err) {
+          showError(err.response?.data?.message || 'Error al procesar la reversión en el servidor.');
+          return;
+        }
+      }
+
+      updateReversalRequest(item.id, {
+        status: nextStatus,
+        adminComment: normalizedComment || null,
+        resolvedAt: new Date().toISOString(),
+      });
+
+      showSuccess(nextStatus === 'APPROVED' ? 'Reversión aprobada' : 'Reversión rechazada');
+      load();
+      setConfirmOpen(false);
     });
-
-    showSuccess(nextStatus === 'APPROVED' ? 'Reversión aprobada' : 'Reversión rechazada');
-    load();
+    setConfirmOpen(true);
   };
 
   return (
@@ -178,6 +249,8 @@ const ReversionsManagementView = () => {
                         <button
                           type="button"
                           className="support-action-btn support-action-btn-unfreeze"
+                          disabled={!canApproveDeposit(item)}
+                          title={!canApproveDeposit(item) ? 'Ese depósito ya no está en un estado reversible para el backend' : 'Aprobar reversión'}
                           onClick={() => handleResolve(item, 'APPROVED')}
                         >
                           Aprobar
@@ -198,6 +271,15 @@ const ReversionsManagementView = () => {
           )}
         </div>
       </section>
+      <ConfirmModal
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        showInput={confirmShowInput}
+        inputPlaceholder={confirmInputPlaceholder}
+        onConfirm={async (value) => { await confirmAction(value); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </AdminLayout>
   );
 };

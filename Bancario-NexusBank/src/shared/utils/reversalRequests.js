@@ -37,6 +37,15 @@ const normalizeType = (type) => {
   return 'TRANSFERENCIA';
 };
 
+const ONE_MINUTE_MS = 60000;
+
+export const isWithinReversalWindow = (operationDate, windowMs = ONE_MINUTE_MS) => {
+  const baseDate = new Date(operationDate || 0).getTime();
+  if (!Number.isFinite(baseDate) || baseDate <= 0) return false;
+
+  return Date.now() - baseDate <= windowMs;
+};
+
 export const getReversalRequests = () => safeRead();
 
 export const getReversalRequestsByUser = ({ userId, email }) => {
@@ -177,4 +186,16 @@ export const hasReversalRequest = (operationIdOrReference) => {
     // Any request that is not rejected counts as an existing reversal attempt
     return (opId === target || ref === target) && (status === 'PENDING' || status === 'APPROVED');
   });
+};
+
+export const canClientRequestReversal = (transaction) => {
+  if (!transaction) return false;
+
+  const type = String(transaction.type || '').toUpperCase();
+  if (type !== 'DEPOSITO' && !type.includes('TRANSFERENCIA')) return false;
+
+  const status = String(transaction.status || '').toUpperCase();
+  if (status === 'REVERTIDA' || status === 'REVERTIDO') return false;
+
+  return isWithinReversalWindow(transaction.date || transaction.createdAt || transaction.updatedAt);
 };

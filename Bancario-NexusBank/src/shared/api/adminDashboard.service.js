@@ -186,6 +186,16 @@ export const adminDashboardService = {
     }
   },
 
+  revertDeposit: async (id, payload = {}) => {
+    try {
+      const response = await adminRequest('put', `/accounts/deposit-requests/${id}/revert`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error reverting deposit:', error);
+      throw error;
+    }
+  },
+
   revertTransfer: async (id, payload = {}) => {
     try {
       const response = await adminRequest('put', `/accounts/transfers/${id}/revert`, payload);

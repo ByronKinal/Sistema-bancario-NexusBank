@@ -4,6 +4,7 @@ import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import { getReversalRequests } from '../../../utils/reversalRequests.js';
 import '../../../../styles/adminDashboard.css';
+import ConfirmModal from '../../ConfirmModal.jsx';
 
 const EmployeDashnoardContainer = () => {
     const [deposits, setDeposits] = useState([]);
@@ -17,6 +18,11 @@ const EmployeDashnoardContainer = () => {
     const [newAmount, setNewAmount] = useState('');
     const [foundAccountName, setFoundAccountName] = useState(null);
     const [lookupLoading, setLookupLoading] = useState(false);
+    // Confirm modal state
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+    const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+    const [confirmAction, setConfirmAction] = useState(() => async () => {});
 
     const getDisplayStatus = (status) => {
         if (status === 'PENDIENTE') return 'PENDIENTE';
@@ -128,9 +134,8 @@ const EmployeDashnoardContainer = () => {
                 const target = norm(cleaned);
                 const found = (Array.isArray(accounts) ? accounts : []).find((a) => {
                     const accNum = norm(a.accountNumber || a.number || a.account || '');
-                    const type = (a.accountType || a.type || '').toString().toLowerCase();
-                    const typeMatch = !newAccountType || type.includes(newAccountType.toLowerCase());
-                    return typeMatch && (accNum === target || accNum.includes(target) || target.includes(accNum));
+                    // Do not enforce account type when searching — match by account number only
+                    return (accNum === target || accNum.includes(target) || target.includes(accNum));
                 });
 
                 if (!cancelled) {
@@ -192,28 +197,36 @@ const EmployeDashnoardContainer = () => {
 
     const handleApprove = async (deposit) => {
         if (deposit.status !== 'PENDIENTE') return;
-        if (!window.confirm('¿Aprobar este depósito?')) return;
-
-        try {
-            await adminDashboardService.approveDeposit(deposit.id);
-            showSuccess('Depósito aprobado correctamente.');
-            fetchDeposits();
-        } catch (error) {
-            showError(error.response?.data?.message || 'Error al aprobar el depósito');
-        }
+        setConfirmTitle('Aprobar depósito');
+        setConfirmMessage('¿Aprobar este depósito?');
+        setConfirmAction(() => async () => {
+            try {
+                await adminDashboardService.approveDeposit(deposit.id);
+                showSuccess('Depósito aprobado correctamente.');
+                fetchDeposits();
+            } catch (error) {
+                showError(error.response?.data?.message || 'Error al aprobar el depósito');
+            }
+            setConfirmOpen(false);
+        });
+        setConfirmOpen(true);
     };
 
     const handleReject = async (deposit) => {
         if (deposit.status !== 'PENDIENTE') return;
-        if (!window.confirm('¿Rechazar este depósito?')) return;
-
-        try {
-            await adminDashboardService.rejectDeposit(deposit.id);
-            showSuccess('Depósito rechazado correctamente.');
-            fetchDeposits();
-        } catch (error) {
-            showError(error.response?.data?.message || 'Error al rechazar el depósito');
-        }
+        setConfirmTitle('Rechazar depósito');
+        setConfirmMessage('¿Rechazar este depósito?');
+        setConfirmAction(() => async () => {
+            try {
+                await adminDashboardService.rejectDeposit(deposit.id);
+                showSuccess('Depósito rechazado correctamente.');
+                fetchDeposits();
+            } catch (error) {
+                showError(error.response?.data?.message || 'Error al rechazar el depósito');
+            }
+            setConfirmOpen(false);
+        });
+        setConfirmOpen(true);
     };
 
     return (
@@ -493,6 +506,15 @@ const EmployeDashnoardContainer = () => {
                         </div>
                     </div>
                 )}
+                <ConfirmModal
+                    open={confirmOpen}
+                    title={confirmTitle}
+                    message={confirmMessage}
+                    confirmText="Aceptar"
+                    cancelText="Cancelar"
+                    onConfirm={async () => { await confirmAction(); }}
+                    onCancel={() => setConfirmOpen(false)}
+                />
             </section>
         </EmployeeLayout>
     );

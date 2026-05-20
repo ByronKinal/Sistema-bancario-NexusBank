@@ -6,6 +6,7 @@ import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import { MdEdit, MdPause, MdClose, MdCheck, MdPlayArrow, MdAdd, MdArrowForward } from 'react-icons/md';
 import '../../../../styles/promotions.css';
+import ConfirmModal from '../../ConfirmModal.jsx';
 
 const PROMOTION_TYPES = [
   'APERTURA_CUENTA_BONUS',
@@ -55,6 +56,11 @@ const PromotionsManagementView = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' o 'edit'
   const [selectedPromotion, setSelectedPromotion] = useState(null);
+  // Confirm modal
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmAction, setConfirmAction] = useState(() => () => {});
 
   // Fetch de promociones
   const fetchPromotions = async () => {
@@ -163,20 +169,22 @@ const PromotionsManagementView = () => {
       'PAUSADA': 'Pausar',
       'EXPIRADA': 'Marcar como expirada'
     };
-    
-    if (!window.confirm(`¿Estás seguro de que deseas ${statusLabels[newStatus]} la promoción "${promotion.name}"?`)) {
-      return;
-    }
 
-    try {
-      await adminDashboardService.updatePromotionStatus(promotion.id || promotion._id, newStatus);
-      showSuccess(`Promoción ${statusLabels[newStatus].toLowerCase()} exitosamente`);
-      fetchPromotions();
-    } catch (error) {
-      console.error('Error changing promotion status:', error);
-      const message = error.response?.data?.message || error.message || 'Error al cambiar estado de promoción';
-      showError(message);
-    }
+    setConfirmTitle(statusLabels[newStatus]);
+    setConfirmMessage(`¿Estás seguro de que deseas ${statusLabels[newStatus].toLowerCase()} la promoción "${promotion.name}"?`);
+    setConfirmAction(() => async () => {
+      try {
+        await adminDashboardService.updatePromotionStatus(promotion.id || promotion._id, newStatus);
+        showSuccess(`Promoción ${statusLabels[newStatus].toLowerCase()} exitosamente`);
+        fetchPromotions();
+      } catch (error) {
+        console.error('Error changing promotion status:', error);
+        const message = error.response?.data?.message || error.message || 'Error al cambiar estado de promoción';
+        showError(message);
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const handleStatusToggle = async (promotion) => {
@@ -190,15 +198,20 @@ const PromotionsManagementView = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta promoción?')) return;
-    try {
-      await adminDashboardService.deletePromotion(id);
-      showSuccess('Promoción eliminada con éxito');
-      fetchPromotions();
-    } catch (error) {
-      showError(error.response?.data?.message || 'Error al eliminar');
-    }
+  const handleDelete = async (id, name) => {
+    setConfirmTitle('Eliminar promoción');
+    setConfirmMessage(`¿Estás seguro de eliminar la promoción "${name}"?`);
+    setConfirmAction(() => async () => {
+      try {
+        await adminDashboardService.deletePromotion(id);
+        showSuccess('Promoción eliminada con éxito');
+        fetchPromotions();
+      } catch (error) {
+        showError(error.response?.data?.message || 'Error al eliminar');
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   // Obtener botones de acción según estado
@@ -497,6 +510,17 @@ const PromotionsManagementView = () => {
           onSave={handlePromotionSaved}
         />
       )}
+
+      {/* Confirm modal (reemplaza window.confirm) */}
+      <ConfirmModal
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        onConfirm={async () => { await confirmAction(); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 };

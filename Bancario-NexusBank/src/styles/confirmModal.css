@@ -1,0 +1,104 @@
+/* Confirm modal styles - reusable and lightweight */
+.cb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: cb-fade 160ms ease-out;
+}
+
+.cb-modal {
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.25);
+  overflow: hidden;
+  font-family: inherit;
+  transform: translateY(6px);
+  animation: cb-pop 200ms cubic-bezier(.2,.9,.2,1);
+}
+
+.cb-modal-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.06);
+}
+
+.cb-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cb-modal-body {
+  padding: 18px 20px;
+}
+
+.cb-modal-message {
+  margin: 0;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.cb-modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(16, 24, 40, 0.04);
+  background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0));
+}
+
+.cb-btn {
+  min-width: 92px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cb-btn-cancel {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid rgba(16, 24, 40, 0.06);
+}
+
+.cb-btn-confirm {
+  background: linear-gradient(180deg,#2563eb,#1e40af);
+  color: white;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.18);
+}
+
+.cb-modal-input {
+  width: 100%;
+  min-height: 84px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(16,24,40,0.08);
+  resize: vertical;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+@keyframes cb-fade {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes cb-pop {
+  from { transform: translateY(12px) scale(.995); opacity: 0 }
+  to   { transform: translateY(0) scale(1); opacity: 1 }
+}
+
+/* small screens */
+@media (max-width: 420px) {
+  .cb-modal { margin: 0 16px; max-width: calc(100% - 32px); }
+  .cb-modal-footer { padding: 12px 14px; }
+}

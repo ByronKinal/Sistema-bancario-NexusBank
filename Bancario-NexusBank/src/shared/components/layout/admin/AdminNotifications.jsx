@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
+import ConfirmModal from '../../ConfirmModal.jsx';
 import { useNavigate } from 'react-router-dom';
 import { FaBell } from 'react-icons/fa';
 
@@ -37,26 +38,42 @@ const AdminNotifications = () => {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
+  // Confirm modal state for approve/reject actions
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmAction, setConfirmAction] = useState(() => async () => {});
+
   const handleApprove = async (id) => {
-    if (!window.confirm('¿Aprobar esta solicitud?')) return;
-    try {
-      await adminDashboardService.approveAccountRequest(id);
-      showSuccess('Solicitud aprobada - Cuenta creada');
-      fetchPending();
-    } catch (e) {
-      showError(e.response?.data?.message || 'Error al aprobar');
-    }
+    setConfirmTitle('Aprobar solicitud');
+    setConfirmMessage('¿Aprobar esta solicitud y crear la cuenta?');
+    setConfirmAction(() => async () => {
+      try {
+        await adminDashboardService.approveAccountRequest(id);
+        showSuccess('Solicitud aprobada - Cuenta creada');
+        fetchPending();
+      } catch (e) {
+        showError(e.response?.data?.message || 'Error al aprobar');
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const handleReject = async (id) => {
-    if (!window.confirm('¿Rechazar esta solicitud?')) return;
-    try {
-      await adminDashboardService.rejectAccountRequest(id);
-      showSuccess('Solicitud rechazada');
-      fetchPending();
-    } catch (e) {
-      showError(e.response?.data?.message || 'Error al rechazar');
-    }
+    setConfirmTitle('Rechazar solicitud');
+    setConfirmMessage('¿Deseas rechazar esta solicitud?');
+    setConfirmAction(() => async () => {
+      try {
+        await adminDashboardService.rejectAccountRequest(id);
+        showSuccess('Solicitud rechazada');
+        fetchPending();
+      } catch (e) {
+        showError(e.response?.data?.message || 'Error al rechazar');
+      }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const badgeCount = pending.length;
@@ -105,6 +122,15 @@ const AdminNotifications = () => {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        onConfirm={async () => { await confirmAction(); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 };

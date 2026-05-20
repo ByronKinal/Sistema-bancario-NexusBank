@@ -5,17 +5,14 @@ import { useClientStore } from '../store/useClientStore.js';
 import { clientTransferService } from '../../../shared/api/clientTransfer.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
-import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved } from '../../../shared/utils/reversalRequests.js';
-
-const DAILY_TRANSFER_LIMIT = 2000;
-
+import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved, hasReversalRequest, canClientRequestReversal } from '../../../shared/utils/reversalRequests.js';
+import ConfirmModal from '../../../shared/components/ConfirmModal.jsx';
 const recipientTypes = [
   { value: 'TERCERO', label: 'Tercero' },
   { value: 'PROPIA', label: 'Cuenta propia' },
 ];
-
+const DAILY_TRANSFER_LIMIT = 2000;
 const formatAmount = (value) => Number(value || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 });
-
 const getAccountTypeLabel = (account) => {
   const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
 
@@ -77,6 +74,13 @@ export const Transfers = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [pendingTransfer, setPendingTransfer] = useState(null);
   const [reversalUpdates, setReversalUpdates] = useState(0);
+  // Confirm modal for reversal requests
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmShowInput, setConfirmShowInput] = useState(false);
+  const [confirmInputPlaceholder, setConfirmInputPlaceholder] = useState('');
+  const [confirmAction, setConfirmAction] = useState(() => async () => {});
 
   useEffect(() => {
     fetchAllAccounts();
@@ -458,6 +462,7 @@ export const Transfers = () => {
 
   const canReverseTransfer = (transfer) => {
     if (!transfer || !latestReversibleTransaction || transfer.status === 'REVERTIDA') return false;
+
     return String(transfer.id) === String(latestReversibleTransaction.id)
       || String(transfer.reference) === String(latestReversibleTransaction.reference);
   };
@@ -465,33 +470,47 @@ export const Transfers = () => {
   const handleRequestReversal = (transfer) => {
     if (!transfer) return;
 
-    const reason = window.prompt('Describe por qué quieres revertir esta transferencia:') || '';
-    if (!reason.trim()) {
-      showError('Debes escribir un motivo para enviar la reversión.');
+    if (!canClientRequestReversal(transfer)) {
+      showError('La ventana de 1 minuto para solicitar la reversión ya expiró.');
       return;
     }
 
-    try {
-      addReversalRequest({
-        type: 'TRANSFERENCIA',
-        operationId: transfer.id,
-        reference: transfer.reference,
-        amount: transfer.amount,
-        sourceAccountNumber: transfer.sourceAccountNumber,
-        destinationAccountNumber: transfer.destinationAccountNumber,
-        operationDate: transfer.date,
-        operationDescription: transfer.description,
-        reason,
-        userId: user?.id,
-        userEmail: user?.email,
-        userName: user?.name || user?.username || null,
-      });
+    setConfirmTitle('Solicitar reversión');
+    setConfirmMessage('Describe por qué quieres revertir esta transferencia:');
+    setConfirmShowInput(true);
+    setConfirmInputPlaceholder('Motivo de la reversión');
+    setConfirmAction(() => async (reason) => {
+      const normalized = String(reason || '').trim();
+      if (!normalized) {
+        showError('Debes escribir un motivo para enviar la reversión.');
+        return;
+      }
 
-      showSuccess('Solicitud de reversión enviada al administrador.');
-      navigate('/clientdashboard/reversions');
-    } catch (requestError) {
-      showError(requestError?.message || 'No fue posible solicitar la reversión.');
-    }
+      try {
+        addReversalRequest({
+          type: 'TRANSFERENCIA',
+          operationId: transfer.id,
+          reference: transfer.reference,
+          amount: transfer.amount,
+          sourceAccountNumber: transfer.sourceAccountNumber,
+          destinationAccountNumber: transfer.destinationAccountNumber,
+          operationDate: transfer.date,
+          operationDescription: transfer.description,
+          reason: normalized,
+          userId: user?.id,
+          userEmail: user?.email,
+          userName: user?.name || user?.username || null,
+        });
+
+        showSuccess('Solicitud de reversión enviada al administrador.');
+        navigate('/clientdashboard/reversions');
+      } catch (requestError) {
+        showError(requestError?.message || 'No fue posible solicitar la reversión.');
+      }
+
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const currentSelectedCurrency = isManualCurrency ? customCurrency.toUpperCase() : currency;
@@ -850,6 +869,8 @@ export const Transfers = () => {
                 transferHistory.map((item) => {
                   const isActive = selectedTransfer?.id === item.id;
 
+                  const isReversalRequested = hasReversalRequest(item.id) || hasReversalRequest(item.reference);
+
                   return (
                     <div
                       key={`${item.id}-${item.reference}`}
@@ -873,15 +894,20 @@ export const Transfers = () => {
                         >
                           Ver
                         </button>
-                        {canReverseTransfer(item) && (
-                          <button
-                            type="button"
-                            onClick={() => handleRequestReversal(item)}
-                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
-                          >
-                            Revertir
-                          </button>
-                        )}
+                        {canReverseTransfer(item) && (() => {
+                          const title = isReversalRequested ? 'Solicitud ya enviada' : 'Solo la última transacción puede solicitar reversión';
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleRequestReversal(item)}
+                              disabled={isReversalRequested}
+                              title={title}
+                              className={`rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white transition ${isReversalRequested ? 'opacity-50 cursor-not-allowed hover:bg-white hover:text-[#B45309]' : 'hover:bg-[#B45309] hover:text-white'}`}
+                            >
+                              Revertir
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -891,6 +917,15 @@ export const Transfers = () => {
           </section>
         </aside>
       </div>
+      <ConfirmModal
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        showInput={confirmShowInput}
+        inputPlaceholder={confirmInputPlaceholder}
+        onConfirm={async (value) => { await confirmAction(value); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 };

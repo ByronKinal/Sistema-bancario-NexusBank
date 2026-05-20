@@ -4,6 +4,7 @@ import AdminSidebar from './AdminSidebar.jsx';
 import AdminAddUserModal from './AdminAddUserModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
+import ConfirmModal from '../../ConfirmModal.jsx';
 import '../../../../styles/adminDashboard.css';
 import { FaCheckDouble, FaPlus } from 'react-icons/fa';
 
@@ -13,6 +14,11 @@ const PendingRequestsView = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('PENDIENTE');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Confirm modal state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmAction, setConfirmAction] = useState(() => async () => {});
 
   const fetchRequests = async () => {
     try {
@@ -66,20 +72,25 @@ const PendingRequestsView = () => {
   }, []);
 
   const handleApprove = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar la cuenta de ${req.userName}?`)) return;
-    try {
-      if (req.source === 'request') {
-        await adminDashboardService.approveAccountRequest(req.id);
-      } else if (req.source === 'account') {
-        await adminDashboardService.approveAccount(req.id);
-      } else {
-        throw new Error('Tipo de elemento desconocido');
+    setConfirmTitle('Aprobar cuenta');
+    setConfirmMessage(`¿Estás seguro de que deseas aprobar la cuenta de ${req.userName}?`);
+    setConfirmAction(() => async () => {
+      try {
+        if (req.source === 'request') {
+          await adminDashboardService.approveAccountRequest(req.id);
+        } else if (req.source === 'account') {
+          await adminDashboardService.approveAccount(req.id);
+        } else {
+          throw new Error('Tipo de elemento desconocido');
+        }
+        showSuccess('Cuenta aprobada exitosamente');
+        fetchRequests();
+      } catch (error) {
+        showError(error.response?.data?.message || 'Error al aprobar la cuenta');
       }
-      showSuccess('Cuenta aprobada exitosamente');
-      fetchRequests();
-    } catch (error) {
-      showError(error.response?.data?.message || 'Error al aprobar la cuenta');
-    }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const handleApproveAll = async () => {
@@ -88,40 +99,49 @@ const PendingRequestsView = () => {
       showError('No hay cuentas pendientes para aprobar.');
       return;
     }
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar TODAS las cuentas pendientes (${pendientes.length})?`)) return;
-    
-    setLoading(true);
-    let successCount = 0;
-    let errorCount = 0;
-    for (const req of pendientes) {
-      try {
-        if (req.source === 'request') await adminDashboardService.approveAccountRequest(req.id);
-        else if (req.source === 'account') await adminDashboardService.approveAccount(req.id);
-        successCount++;
-      } catch (e) {
-        errorCount++;
+    setConfirmTitle('Aprobar todas');
+    setConfirmMessage(`¿Estás seguro de que deseas aprobar TODAS las cuentas pendientes (${pendientes.length})?`);
+    setConfirmAction(() => async () => {
+      setLoading(true);
+      let successCount = 0;
+      let errorCount = 0;
+      for (const req of pendientes) {
+        try {
+          if (req.source === 'request') await adminDashboardService.approveAccountRequest(req.id);
+          else if (req.source === 'account') await adminDashboardService.approveAccount(req.id);
+          successCount++;
+        } catch (e) {
+          errorCount++;
+        }
       }
-    }
-    if (successCount > 0) showSuccess(`${successCount} cuentas aprobadas exitosamente.`);
-    if (errorCount > 0) showError(`Error al aprobar ${errorCount} cuentas.`);
-    fetchRequests();
+      if (successCount > 0) showSuccess(`${successCount} cuentas aprobadas exitosamente.`);
+      if (errorCount > 0) showError(`Error al aprobar ${errorCount} cuentas.`);
+      fetchRequests();
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   const handleReject = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas rechazar la cuenta de ${req.userName}?`)) return;
-    try {
-      if (req.source === 'request') {
-        await adminDashboardService.rejectAccountRequest(req.id);
-      } else if (req.source === 'account') {
-        await adminDashboardService.rejectAccount(req.id);
-      } else {
-        throw new Error('Tipo de elemento desconocido');
+    setConfirmTitle('Rechazar cuenta');
+    setConfirmMessage(`¿Estás seguro de que deseas rechazar la cuenta de ${req.userName}?`);
+    setConfirmAction(() => async () => {
+      try {
+        if (req.source === 'request') {
+          await adminDashboardService.rejectAccountRequest(req.id);
+        } else if (req.source === 'account') {
+          await adminDashboardService.rejectAccount(req.id);
+        } else {
+          throw new Error('Tipo de elemento desconocido');
+        }
+        showSuccess('Cuenta rechazada exitosamente');
+        fetchRequests();
+      } catch (error) {
+        showError(error.response?.data?.message || 'Error al rechazar la cuenta');
       }
-      showSuccess('Cuenta rechazada exitosamente');
-      fetchRequests();
-    } catch (error) {
-      showError(error.response?.data?.message || 'Error al rechazar la cuenta');
-    }
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   // Filter
@@ -247,6 +267,15 @@ const PendingRequestsView = () => {
           onSuccess={fetchRequests} 
         />
       )}
+      <ConfirmModal
+        open={confirmOpen}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        onConfirm={async () => { await confirmAction(); }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 };

@@ -5,7 +5,8 @@ import { useClientStore } from '../store/useClientStore.js';
 import { clientDepositService } from '../../../shared/api/clientDeposit.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
-import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved, hasReversalRequest } from '../../../shared/utils/reversalRequests.js';
+import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved, hasReversalRequest, canClientRequestReversal } from '../../../shared/utils/reversalRequests.js';
+import ConfirmModal from '../../../shared/components/ConfirmModal.jsx';
 
 const getAccountTypeLabel = (account) => {
   const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
@@ -33,6 +34,13 @@ export const Deposits = () => {
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [requestLoading, setRequestLoading] = useState(false);
   const [reversalUpdates, setReversalUpdates] = useState(0);
+  // Confirm modal for reversal requests
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('Confirmar');
+  const [confirmMessage, setConfirmMessage] = useState('¿Estás seguro?');
+  const [confirmShowInput, setConfirmShowInput] = useState(false);
+  const [confirmInputPlaceholder, setConfirmInputPlaceholder] = useState('');
+  const [confirmAction, setConfirmAction] = useState(() => async () => {});
 
   useEffect(() => {
     fetchAllAccounts();
@@ -341,45 +349,59 @@ export const Deposits = () => {
 
   const canReverseDeposit = (deposit) => {
     if (!deposit || !latestReversibleTransaction || deposit.status === 'REVERTIDO') return false;
-    
+
     const isTarget = String(deposit.id) === String(latestReversibleTransaction.id)
       || String(deposit.reference) === String(latestReversibleTransaction.reference);
-      
+
     if (!isTarget) return false;
 
-    // Don't show button if there is already a pending or approved request
-    return !hasReversalRequest(deposit.id) && !hasReversalRequest(deposit.reference);
+    // Show the button when this is the latest reversible transaction; disabling handled in render
+    return true;
   };
 
   const handleRequestReversal = (deposit) => {
     if (!deposit) return;
 
-    const reason = window.prompt('Describe por qué quieres revertir este depósito:') || '';
-    if (!reason.trim()) {
-      showError('Debes escribir un motivo para enviar la reversión.');
+    if (!canClientRequestReversal(deposit)) {
+      showError('La ventana de 1 minuto para solicitar la reversión ya expiró.');
       return;
     }
 
-    try {
-      addReversalRequest({
-        type: 'DEPOSITO',
-        operationId: deposit.id,
-        reference: deposit.reference,
-        amount: deposit.amount,
-        accountNumber: deposit.account,
-        operationDate: deposit.date,
-        operationDescription: deposit.description,
-        reason,
-        userId: user?.id,
-        userEmail: user?.email,
-        userName: user?.name || user?.username || null,
-      });
+    setConfirmTitle('Solicitar reversión');
+    setConfirmMessage('Describe por qué quieres revertir este depósito:');
+    setConfirmShowInput(true);
+    setConfirmInputPlaceholder('Motivo de la reversión');
+    setConfirmAction(() => async (reason) => {
+      const normalized = String(reason || '').trim();
+      if (!normalized) {
+        showError('Debes escribir un motivo para enviar la reversión.');
+        return;
+      }
 
-      showSuccess('Solicitud de reversión enviada al administrador.');
-      navigate('/clientdashboard/reversions');
-    } catch (requestError) {
-      showError(requestError?.message || 'No fue posible solicitar la reversión.');
-    }
+      try {
+        addReversalRequest({
+          type: 'DEPOSITO',
+          operationId: deposit.id,
+          reference: deposit.reference,
+          amount: deposit.amount,
+          accountNumber: deposit.account,
+          operationDate: deposit.date,
+          operationDescription: deposit.description,
+          reason: normalized,
+          userId: user?.id,
+          userEmail: user?.email,
+          userName: user?.name || user?.username || null,
+        });
+
+        showSuccess('Solicitud de reversión enviada al administrador.');
+        navigate('/clientdashboard/reversions');
+      } catch (requestError) {
+        showError(requestError?.message || 'No fue posible solicitar la reversión.');
+      }
+
+      setConfirmOpen(false);
+    });
+    setConfirmOpen(true);
   };
 
   return (
@@ -490,6 +512,16 @@ export const Deposits = () => {
           </form>
         </section>
 
+        <ConfirmModal
+          open={confirmOpen}
+          title={confirmTitle}
+          message={confirmMessage}
+          showInput={confirmShowInput}
+          inputPlaceholder={confirmInputPlaceholder}
+          onConfirm={async (value) => { await confirmAction(value); }}
+          onCancel={() => setConfirmOpen(false)}
+        />
+
         <section className="glass-panel rounded-3xl p-6 shadow-lg border border-white/60">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -546,28 +578,25 @@ export const Deposits = () => {
 
                     <div className="mt-4 flex justify-between items-center gap-3">
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectDeposit(item.id);
-                          }}
-                          className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isActive ? 'bg-[#2D5899] text-white' : 'bg-white border border-[#2D5899] text-[#2D5899] hover:bg-[#2D5899] hover:text-white'}`}
-                        >
-                          Ver
-                        </button>
-                        {canReverseDeposit(item) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRequestReversal(item);
-                            }}
-                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
-                          >
-                            Revertir
-                          </button>
-                        )}
+                        
+                        {canReverseDeposit(item) && (() => {
+                          const isReversalRequested = hasReversalRequest(item.id) || hasReversalRequest(item.reference);
+                          const title = isReversalRequested ? 'Solicitud ya enviada' : 'Solo la última transacción puede solicitar reversión';
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRequestReversal(item);
+                              }}
+                              disabled={isReversalRequested}
+                              title={title}
+                              className={`rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white transition ${isReversalRequested ? 'opacity-50 cursor-not-allowed hover:bg-white hover:text-[#B45309]' : 'hover:bg-[#B45309] hover:text-white'}`}
+                            >
+                              Revertir
+                            </button>
+                          );
+                        })()}
                       </div>
                       {isActive && <span className="text-xs text-[#2D5899] font-semibold">Seleccionado</span>}
                     </div>
