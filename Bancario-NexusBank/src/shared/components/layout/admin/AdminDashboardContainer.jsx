@@ -4,6 +4,7 @@ import AdminLayout from './AdminLayout.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { axiosAdmin } from '../../../api/api.js';
 import '../../../../styles/adminDashboard.css';
+import { FaUserTie, FaUsers, FaClipboardList, FaGift } from 'react-icons/fa';
 
 // Componente Card reutilizable
 const StatCard = ({ title, value, subtitle, color = '' }) => (
@@ -170,41 +171,41 @@ export const AdminDashboardContainer = () => {
               <div className="quick-actions-section glass-panel shadow-md rounded-2xl border border-white/40 p-5">
                 {/* Yellow Button Requested by User */}
                 <div 
-                  className="mt-6 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  className="mt-6 p-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #C8A84B, #b0933e)' }}
                   onClick={() => navigate('/AdminDashboard/employees')}
                 >
-                  <span className="text-xl mr-2">⏳</span>
+                  <FaUserTie className="text-xl" />
                   Ir a Empleados
                 </div>
 
                 {/* Users Button */}
                 <div 
-                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  className="mt-3 p-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)' }}
                   onClick={() => navigate('/AdminDashboard/users')}
                 >
-                  <span className="text-xl mr-2">👥</span>
+                  <FaUsers className="text-xl" />
                   Usuarios
                 </div>
 
                 {/* Pending Accounts Button */}
                 <div 
-                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  className="mt-3 p-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
                   onClick={() => navigate('/AdminDashboard/requests')}
                 >
-                  <span className="text-xl mr-2">📋</span>
+                  <FaClipboardList className="text-xl" />
                   Ir a Pendientes
                 </div>
 
                 {/* Promotions Management Button */}
                 <div 
-                  className="mt-3 p-4 rounded-xl text-white font-bold text-center cursor-pointer shadow-lg transform transition hover:scale-105"
+                  className="mt-3 p-4 rounded-xl text-white font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg transform transition hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #2D5899, #1A2E52)' }}
                   onClick={() => navigate('/AdminDashboard/promotions')}
                 >
-                  <span className="text-xl mr-2">🎁</span>
+                  <FaGift className="text-xl" />
                   Gestión de Promociones
                 </div>
               </div>

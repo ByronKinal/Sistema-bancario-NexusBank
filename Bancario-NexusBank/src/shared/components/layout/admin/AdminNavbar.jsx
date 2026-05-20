@@ -4,6 +4,7 @@ import { useAuthStore } from '../../../../features/auth/store/authStore.js';
 import Logo from '../../../../assets/animation/Sinfondo.webm';
 import AdminNotifications from './AdminNotifications.jsx';
 import '../../../../styles/AdminNavbar.css';
+import { FaCog, FaSignOutAlt } from 'react-icons/fa';
 
 const buildAvatarSrc = (url) => {
 	if (!url) return null;
@@ -208,13 +209,13 @@ const AdminNavbar = () => {
 								onClick={() => { setIsDropdownOpen(false); navigate('/AdminDashboard/profile-settings'); }}
 								className="w-full text-left px-4 py-2 text-sm font-semibold text-[#1A2E52] hover:bg-blue-50 transition-colors flex items-center"
 							>
-								<span className="mr-2">⚙️</span> Ajustes de perfil
+								<FaCog className="mr-2 text-gray-500 w-4 h-4" /> Ajustes de perfil
 							</button>
 							<button
 								onClick={() => { setIsDropdownOpen(false); logout(); }}
 								className="w-full text-left px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center"
 							>
-								<span className="mr-2">🚪</span> Cerrar Sesión
+								<FaSignOutAlt className="mr-2 text-red-600 w-4 h-4" /> Cerrar Sesión
 							</button>
 						</div>
 					)}

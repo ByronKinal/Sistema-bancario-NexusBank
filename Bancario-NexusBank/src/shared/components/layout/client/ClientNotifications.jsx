@@ -1,6 +1,7 @@
-  import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { notificationService } from '../../../api/notification.service.js';
 import { useNavigate } from 'react-router-dom';
+import { FaBell } from 'react-icons/fa';
 
 const ClientNotifications = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -53,10 +54,10 @@ const ClientNotifications = () => {
     <div ref={wrapperRef} style={{ position: 'relative', marginRight: 12 }}>
       <button
         onClick={async () => { setIsOpen(!isOpen); if (!isOpen) await load(); }}
-        className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift"
+        className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift flex items-center justify-center"
         title="Notificaciones"
       >
-        <span className="text-xl">🔔</span>
+        <FaBell className="w-5 h-5 text-gray-500 hover:text-[#2D5899]" />
         {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full" />}
       </button>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import { useNavigate } from 'react-router-dom';
+import { FaBell } from 'react-icons/fa';
 
 const AdminNotifications = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,12 +65,12 @@ const AdminNotifications = () => {
     <div ref={wrapperRef} style={{ position: 'relative', marginRight: 12 }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift"
+        className="relative p-2 text-gray-500 hover:text-[#2D5899] transition bg-white/50 rounded-full shadow-sm hover-lift flex items-center justify-center"
         title="Solicitudes"
         style={{ border: 'none', cursor: 'pointer' }}
         aria-label="Solicitudes"
       >
-        <span className="text-xl" aria-hidden="true">🔔</span>
+        <FaBell className="w-5 h-5 text-gray-500 hover:text-[#2D5899]" />
         {badgeCount > 0 && (
           <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full" />
         )}

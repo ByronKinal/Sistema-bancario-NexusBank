@@ -3,6 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useClientStore } from '../store/useClientStore.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { showError } from '../../../shared/utils/toast.js';
+import { 
+  FaUser, 
+  FaClipboardList, 
+  FaMoneyBillWave, 
+  FaExchangeAlt, 
+  FaUndo, 
+  FaStar, 
+  FaBullhorn, 
+  FaCreditCard, 
+  FaShoppingBag, 
+  FaInbox 
+} from 'react-icons/fa';
 
 const getAccountTypeLabel = (account) => {
   const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
@@ -147,8 +159,8 @@ export const ClientDashboard = () => {
           <div className="relative z-10">
             <div className="flex justify-between items-start mb-8">
               <p className="text-[#E8D8A0] font-medium tracking-wide uppercase text-sm">Saldo Disponible</p>
-              <div className="p-2 bg-white/20 backdrop-blur-md rounded-lg">
-                <span className="text-xl">💳</span>
+              <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center">
+                <FaCreditCard className="w-5 h-5 text-white" />
               </div>
             </div>
             <h2 className="text-4xl lg:text-5xl font-bold mb-2">
@@ -206,37 +218,42 @@ export const ClientDashboard = () => {
           <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">¿Qué deseas hacer hoy?</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
             {[
-              { label: 'Mis cuentas', icon: '👤', color: 'from-blue-400 to-blue-600' },
-              { label: 'Historial', icon: '📋', color: 'from-teal-400 to-teal-600' },
-              { label: 'Depositar', icon: '💰', color: 'from-indigo-400 to-indigo-600' },
-              { label: 'Transferir', icon: '💸', color: 'from-blue-400 to-blue-600' },
-              { label: 'Reversiones', icon: '↩️', color: 'from-amber-400 to-amber-600' },
-              { label: 'Favoritos', icon: '⭐', color: 'from-teal-400 to-teal-600' },
-              { label: 'Promociones', icon: '📣', color: 'from-teal-400 to-teal-600' },
-            ].map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={() => {
-                  if (action.label === 'Mis cuentas') return navigate('/clientdashboard/accounts');
-                  if (action.label === 'Historial') return navigate('/clientdashboard/account-history');
-                  if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
-                  if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
-                  if (action.label === 'Reversiones') return navigate('/clientdashboard/reversions');
-                  if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
-                  if (action.label === 'Promociones') return navigate('/clientdashboard/promotions');
-                }}
-                className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${action.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
-                <span className="text-4xl transform group-hover:scale-110 transition-transform duration-300">{action.icon}</span>
-                <span className="font-semibold text-[#1A2E52]">{action.label}</span>
-              </button>
-            ))}
+              { label: 'Mis cuentas', icon: FaUser, color: 'from-blue-400 to-blue-600' },
+              { label: 'Historial', icon: FaClipboardList, color: 'from-teal-400 to-teal-600' },
+              { label: 'Depositar', icon: FaMoneyBillWave, color: 'from-indigo-400 to-indigo-600' },
+              { label: 'Transferir', icon: FaExchangeAlt, color: 'from-blue-400 to-blue-600' },
+              { label: 'Reversiones', icon: FaUndo, color: 'from-amber-400 to-amber-600' },
+              { label: 'Favoritos', icon: FaStar, color: 'from-teal-400 to-teal-600' },
+              { label: 'Promociones', icon: FaBullhorn, color: 'from-teal-400 to-teal-600' },
+            ].map((action) => {
+              const ActionIcon = action.icon;
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => {
+                    if (action.label === 'Mis cuentas') return navigate('/clientdashboard/accounts');
+                    if (action.label === 'Historial') return navigate('/clientdashboard/account-history');
+                    if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
+                    if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
+                    if (action.label === 'Reversiones') return navigate('/clientdashboard/reversions');
+                    if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
+                    if (action.label === 'Promociones') return navigate('/clientdashboard/promotions');
+                  }}
+                  className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${action.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
+                  <span className="text-4xl transform group-hover:scale-110 transition-transform duration-300 flex items-center justify-center text-[#2D5899]">
+                    <ActionIcon className="w-8 h-8" />
+                  </span>
+                  <span className="font-semibold text-[#1A2E52]">{action.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Cuentas Secundarias */}
+        {/* Cuenta Principal y Secundarias */}
         <div className="lg:col-span-1">
           <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">Mi Cuenta</h3>
           <div className="space-y-4">
@@ -302,7 +319,11 @@ export const ClientDashboard = () => {
                         ['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'
                       }`}
                     >
-                      {['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? '🛍️' : '💰'}
+                      {['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? (
+                        <FaShoppingBag className="w-5 h-5" />
+                      ) : (
+                        <FaMoneyBillWave className="w-5 h-5" />
+                      )}
                     </div>
                     <div>
                       <p className="font-bold text-[#1A2E52]">{tx.description || tx.concept || 'Transacción'}</p>
@@ -319,9 +340,9 @@ export const ClientDashboard = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-10">
-              <span className="text-4xl">📭</span>
-              <p className="text-gray-500 font-medium mt-3">No hay movimientos recientes.</p>
+            <div className="text-center py-10 flex flex-col items-center justify-center">
+              <FaInbox className="w-12 h-12 text-gray-400 mb-3" />
+              <p className="text-gray-500 font-medium">No hay movimientos recientes.</p>
             </div>
           )}
         </div>
@@ -329,3 +350,4 @@ export const ClientDashboard = () => {
     </div>
   );
 };
+

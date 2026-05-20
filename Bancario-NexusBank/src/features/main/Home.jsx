@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import '../../styles/home.css';
+import { FaMapMarkerAlt, FaGlobe, FaChevronDown } from 'react-icons/fa';
 
 const Home = () => {
   return (
@@ -297,17 +298,17 @@ const Home = () => {
           <div className="footer-bottom-copy">© 2024 NexusBank. Todos los derechos reservados.</div>
 
           <div className="footer-bottom-locale">
-            <span className="footer-bottom-item">
-              <span className="footer-bottom-icon" aria-hidden="true">📍</span>
+            <span className="footer-bottom-item flex items-center">
+              <FaMapMarkerAlt className="footer-bottom-icon text-[#2D5899] mr-1 w-4 h-4" />
               <span>Guatemala</span>
             </span>
 
             <span className="footer-bottom-separator" aria-hidden="true" />
 
-            <button type="button" className="footer-bottom-item footer-bottom-button" aria-label="Idioma español">
-              <span className="footer-bottom-icon" aria-hidden="true">🌐</span>
+            <button type="button" className="footer-bottom-item footer-bottom-button flex items-center" aria-label="Idioma español">
+              <FaGlobe className="footer-bottom-icon text-[#2D5899] mr-1 w-4 h-4" />
               <span>Español</span>
-              <span className="footer-bottom-caret" aria-hidden="true">⌄</span>
+              <FaChevronDown className="footer-bottom-caret ml-1 w-3 h-3 text-gray-500" />
             </button>
           </div>
         </div>

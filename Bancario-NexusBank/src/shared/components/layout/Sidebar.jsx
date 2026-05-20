@@ -1,5 +1,20 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../../features/auth/store/authStore.js';
+import { 
+  FaHome, 
+  FaCreditCard, 
+  FaHistory, 
+  FaMoneyBillWave, 
+  FaExchangeAlt, 
+  FaUndo, 
+  FaStar, 
+  FaGift, 
+  FaChartBar, 
+  FaUsers, 
+  FaBriefcase, 
+  FaClipboardList, 
+  FaCog 
+} from 'react-icons/fa';
 
 export const Sidebar = () => {
   const location = useLocation();
@@ -9,22 +24,22 @@ export const Sidebar = () => {
   const isAdmin = userRole === 'Admin' || userRole === 'Administrador' || userRole === 'PLATFORM_ADMIN';
 
   const clientNavItems = [
-    { path: '/clientdashboard', label: 'Inicio', icon: '🏠' },
-    { path: '/clientdashboard/accounts', label: 'Mis Cuentas', icon: '💳' },
-    { path: '/clientdashboard/account-history', label: 'Historial', icon: '📜' },
-    { path: '/clientdashboard/deposits', label: 'Depósitos', icon: '💰' },
-    { path: '/clientdashboard/transfers', label: 'Transferencias', icon: '💸' },
-    { path: '/clientdashboard/reversions', label: 'Reversiones', icon: '↩️' },
-    { path: '/clientdashboard/favorites', label: 'Favoritos', icon: '⭐' },
-    { path: '/clientdashboard/promotions', label: 'Promociones', icon: '🎁' },
+    { path: '/clientdashboard', label: 'Inicio', icon: FaHome },
+    { path: '/clientdashboard/accounts', label: 'Mis Cuentas', icon: FaCreditCard },
+    { path: '/clientdashboard/account-history', label: 'Historial', icon: FaHistory },
+    { path: '/clientdashboard/deposits', label: 'Depósitos', icon: FaMoneyBillWave },
+    { path: '/clientdashboard/transfers', label: 'Transferencias', icon: FaExchangeAlt },
+    { path: '/clientdashboard/reversions', label: 'Reversiones', icon: FaUndo },
+    { path: '/clientdashboard/favorites', label: 'Favoritos', icon: FaStar },
+    { path: '/clientdashboard/promotions', label: 'Promociones', icon: FaGift },
   ];
 
   const adminNavItems = [
-    { path: '/AdminDashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/AdminDashboard/users', label: 'Usuarios', icon: '👥' },
-    { path: '/AdminDashboard/accounts', label: 'Cuentas', icon: '💼' },
-    { path: '/AdminDashboard/transactions', label: 'Transacciones', icon: '📋' },
-    { path: '/AdminDashboard/settings', label: 'Configuración', icon: '⚙️' },
+    { path: '/AdminDashboard', label: 'Dashboard', icon: FaChartBar },
+    { path: '/AdminDashboard/users', label: 'Usuarios', icon: FaUsers },
+    { path: '/AdminDashboard/accounts', label: 'Cuentas', icon: FaBriefcase },
+    { path: '/AdminDashboard/transactions', label: 'Transacciones', icon: FaClipboardList },
+    { path: '/AdminDashboard/settings', label: 'Configuración', icon: FaCog },
   ];
 
   const navItems = isAdmin ? adminNavItems : clientNavItems;
@@ -39,6 +54,7 @@ export const Sidebar = () => {
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
+          const IconComponent = item.icon;
           return (
             <Link
               key={item.path}
@@ -49,7 +65,9 @@ export const Sidebar = () => {
                   : 'text-gray-600 hover:bg-white/60 hover:text-[#2D5899]'
               }`}
             >
-              <span className="text-xl mr-3">{item.icon}</span>
+              <span className="text-xl mr-3">
+                <IconComponent className="w-5 h-5" />
+              </span>
               <span className="font-semibold text-sm">{item.label}</span>
             </Link>
           );

@@ -5,6 +5,7 @@ import AdminAddUserModal from './AdminAddUserModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import '../../../../styles/adminDashboard.css';
+import { FaCheckDouble, FaPlus } from 'react-icons/fa';
 
 const PendingRequestsView = () => {
   const [requests, setRequests] = useState([]);
@@ -149,13 +150,13 @@ const PendingRequestsView = () => {
                   onClick={handleApproveAll}
                   className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
                 >
-                  <span>✓✓</span> Aceptar Todas
+                  <FaCheckDouble /> Aceptar Todas
                 </button>
                 <button 
                   onClick={() => setIsModalOpen(true)}
                   className="px-6 py-3 bg-gradient-to-r from-[#2D5899] to-[#1A2E52] text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
                 >
-                  <span>➕</span> Agregar Usuario
+                  <FaPlus /> Agregar Usuario
                 </button>
               </div>
             </div>
