@@ -539,8 +539,8 @@ export const createTransfer = async (req, res) => {
             }
         }
 
-        const sourceNewBalance = sourceBalance - finalTransferAmount;
-        const destinationNewBalance = destinationBalance + baseAmount + transferBonusAmount;
+        const sourceNewBalance = sourceBalance - finalTransferAmount + transferBonusAmount;
+        const destinationNewBalance = destinationBalance + baseAmount;
 
         sourceAccount.accountBalance = sourceNewBalance.toFixed(2);
         destinationAccount.accountBalance = destinationNewBalance.toFixed(2);
@@ -555,7 +555,7 @@ export const createTransfer = async (req, res) => {
             type: 'TRANSFERENCIA_ENVIADA',
             amount: finalTransferAmount.toFixed(2),
             description: transferDescription,
-            balanceAfter: sourceNewBalance.toFixed(2),
+            balanceAfter: (sourceBalance - finalTransferAmount).toFixed(2),
             relatedAccountId: destinationAccount.id,
             status: 'COMPLETADA',
             appliedCouponId: couponId,
@@ -570,19 +570,19 @@ export const createTransfer = async (req, res) => {
             type: 'TRANSFERENCIA_RECIBIDA',
             amount: totalReceivedAmount.toFixed(2),
             description: transferDescription,
-            balanceAfter: (destinationBalance + baseAmount).toFixed(2),
+            balanceAfter: destinationNewBalance.toFixed(2),
             relatedAccountId: sourceAccount.id,
             status: 'COMPLETADA'
         }, { transaction: dbTransaction });
 
         if (transferBonusAmount > 0) {
             await Transaction.create({
-                accountId: destinationAccount.id,
+                accountId: sourceAccount.id,
                 type: 'DEPOSITO',
                 amount: transferBonusAmount.toFixed(2),
-                description: 'Bono promocional por transferencia recibida',
-                balanceAfter: destinationNewBalance.toFixed(2),
-                relatedAccountId: sourceAccount.id,
+                description: 'Bono cashback por transferencia enviada',
+                balanceAfter: sourceNewBalance.toFixed(2),
+                relatedAccountId: destinationAccount.id,
                 status: 'COMPLETADA',
                 appliedCouponId: couponId
             }, { transaction: dbTransaction });

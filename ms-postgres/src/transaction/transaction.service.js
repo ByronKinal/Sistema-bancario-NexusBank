@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { Transaction } from './transaction.model.js';
 import { Account } from '../account/account.model.js';
+import sequelize from '../../configs/db.js';
 
 /**
  * Obtiene el historial de movimientos del cliente con soporte para paginación y filtros
@@ -104,6 +105,39 @@ export const getAccountHistory = async (
 		// Contar total
 		const total = await Transaction.count({ where: whereClause });
 
+		// Calcular resumen de todos los movimientos que coinciden con los filtros (sin paginar)
+		const summaryTransactions = await Transaction.findAll({
+			where: whereClause,
+			attributes: [
+				'type',
+				[sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount']
+			],
+			group: ['type'],
+			raw: true
+		});
+
+		let totalIncome = 0;
+		let totalExpense = 0;
+
+		summaryTransactions.forEach(item => {
+			const amount = parseFloat(item.totalAmount) || 0;
+			const isIncome = ['DEPOSITO', 'TRANSFERENCIA_RECIBIDA'].includes(item.type);
+			if (isIncome) {
+				totalIncome += amount;
+			} else {
+				totalExpense += amount;
+			}
+		});
+
+		const netChange = totalIncome - totalExpense;
+
+		const globalSummary = {
+			totalTransactions: total,
+			totalIncome: totalIncome.toFixed(2),
+			totalExpense: totalExpense.toFixed(2),
+			netChange: netChange.toFixed(2)
+		};
+
 		// Obtener transacciones con paginación
 		const transactions = await Transaction.findAll({
 			where: whereClause,
@@ -154,7 +188,7 @@ export const getAccountHistory = async (
 					total,
 					pages: Math.ceil(total / limitNum)
 				},
-				summary: calculateSummary(formattedTransactions)
+				summary: globalSummary
 			};
 		}
 
@@ -199,7 +233,7 @@ export const getAccountHistory = async (
 				total,
 				pages: Math.ceil(total / limitNum)
 			},
-			summary: calculateSummary(formattedTransactions)
+			summary: globalSummary
 		};
 	} catch (error) {
 		console.error('Error in getAccountHistory:', error);

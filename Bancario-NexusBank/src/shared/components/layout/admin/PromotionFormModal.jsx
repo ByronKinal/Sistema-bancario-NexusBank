@@ -145,36 +145,12 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
       }
     }
 
-    // Validar al menos un beneficio
-    const hasBenefit = formData.discountPercentage || formData.cashbackPercentage || 
-                       formData.cashbackAmount || formData.bonusPoints;
-    if (!hasBenefit) {
-      newErrors.benefits = 'Debes especificar al menos un beneficio (descuento, cashback o puntos)';
-    }
-
-    // Validaciones numéricas
-    if (formData.discountPercentage && (isNaN(formData.discountPercentage) || formData.discountPercentage < 0 || formData.discountPercentage > 100)) {
-      newErrors.discountPercentage = 'Debe ser un número entre 0 y 100';
-    }
-    if (formData.cashbackPercentage && (isNaN(formData.cashbackPercentage) || formData.cashbackPercentage < 0 || formData.cashbackPercentage > 100)) {
-      newErrors.cashbackPercentage = 'Debe ser un número entre 0 y 100';
+    // Beneficio único: cashback en dinero
+    if (!formData.cashbackAmount && formData.cashbackAmount !== 0) {
+      newErrors.benefits = 'Debes especificar el cashback en dinero';
     }
     if (formData.cashbackAmount && (isNaN(formData.cashbackAmount) || formData.cashbackAmount < 0)) {
       newErrors.cashbackAmount = 'Debe ser un número no negativo';
-    }
-    if (formData.bonusPoints && (isNaN(formData.bonusPoints) || formData.bonusPoints < 0 || !Number.isInteger(parseFloat(formData.bonusPoints)))) {
-      newErrors.bonusPoints = 'Debe ser un número entero no negativo';
-    }
-
-    // Validaciones de límites
-    if (formData.minDepositAmount && isNaN(formData.minDepositAmount)) {
-      newErrors.minDepositAmount = 'Debe ser un número válido';
-    }
-    if (formData.maxUsesPerClient && (isNaN(formData.maxUsesPerClient) || formData.maxUsesPerClient <= 0)) {
-      newErrors.maxUsesPerClient = 'Debe ser un número mayor a 0';
-    }
-    if (formData.maxUsesTotalPromotion && (isNaN(formData.maxUsesTotalPromotion) || formData.maxUsesTotalPromotion <= 0)) {
-      newErrors.maxUsesTotalPromotion = 'Debe ser un número mayor a 0';
     }
 
     setErrors(newErrors);
@@ -414,116 +390,33 @@ const PromotionFormModal = ({ mode = 'create', promotion = null, onClose, onSave
           {/* Beneficios */}
           <div style={{ marginBottom: 24 }}>
             <h3 style={{ color: '#C8A84B', fontSize: 14, fontWeight: 700, marginBottom: 16, textTransform: 'uppercase' }}>
-              Beneficios (Mínimo 1 requerido) *
+              Beneficios (Cashback en dinero) *
             </h3>
             {errors.benefits && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 12 }}><MdWarning className="inline mr-1" /> {errors.benefits}</div>}
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div>
-                <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                  Descuento (%)
-                </label>
-                <input
-                  type="number"
-                  name="discountPercentage"
-                  value={formData.discountPercentage}
-                  onChange={handleInputChange}
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: `1px solid ${errors.discountPercentage ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: 14,
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="0 - 100"
-                />
-                {errors.discountPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.discountPercentage}</div>}
-              </div>
-
-              <div>
-                <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                  Cashback (%)
-                </label>
-                <input
-                  type="number"
-                  name="cashbackPercentage"
-                  value={formData.cashbackPercentage}
-                  onChange={handleInputChange}
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: `1px solid ${errors.cashbackPercentage ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: 14,
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="0 - 100"
-                />
-                {errors.cashbackPercentage && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.cashbackPercentage}</div>}
-              </div>
-
-              <div>
-                <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                  Cashback (Monto en Q)
-                </label>
-                <input
-                  type="number"
-                  name="cashbackAmount"
-                  value={formData.cashbackAmount}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.01"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: `1px solid ${errors.cashbackAmount ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: 14,
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="0.00"
-                />
-                {errors.cashbackAmount && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.cashbackAmount}</div>}
-              </div>
-
-              <div>
-                <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                  Puntos de Bonificación
-                </label>
-                <input
-                  type="number"
-                  name="bonusPoints"
-                  value={formData.bonusPoints}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="1"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: `1px solid ${errors.bonusPoints ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: 14,
-                    boxSizing: 'border-box'
-                  }}
-                  placeholder="0"
-                />
-                {errors.bonusPoints && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.bonusPoints}</div>}
-              </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ color: '#cfe0ff', fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                Cashback (Monto en Q)
+              </label>
+              <input
+                type="number"
+                name="cashbackAmount"
+                value={formData.cashbackAmount}
+                onChange={handleInputChange}
+                min="0"
+                step="0.01"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: `1px solid ${errors.cashbackAmount ? '#f87171' : 'rgba(255,255,255,0.2)'}`,
+                  borderRadius: 8,
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: 14,
+                  boxSizing: 'border-box'
+                }}
+                placeholder="0.00"
+              />
+              {errors.cashbackAmount && <div style={{ color: '#f87171', fontSize: 12, marginTop: 4 }}><MdWarning className="inline mr-1" /> {errors.cashbackAmount}</div>}
             </div>
           </div>
 

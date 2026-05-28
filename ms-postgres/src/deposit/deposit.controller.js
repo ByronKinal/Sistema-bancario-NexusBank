@@ -1,4 +1,4 @@
-import { Account } from '../account/account.model.js';
+    import { Account } from '../account/account.model.js';
 import sequelize from '../../configs/db.js';
 import { Deposit } from './deposit.model.js';
 import { TransactionAudit } from '../transaction/transactionAudit.model.js';
@@ -462,15 +462,24 @@ export const approveDepositRequest = async (req, res) => {
         await destinationAccount.save({ transaction: dbTransaction });
 
         let depositDescription = depositRequest.description || 'Depósito aprobado';
-        if (couponApplied && cashbackAmount > 0) {
-            depositDescription += ` | Incluye Cashback: Q${cashbackAmount.toFixed(2)}`;
-        }
         depositDescription += ` | Aprobada por ${approverUserId}`;
 
         depositRequest.status = 'COMPLETADA';
-        depositRequest.balanceAfter = finalBalance.toFixed(2);
+        depositRequest.balanceAfter = (accountBalance + requestAmount).toFixed(2);
         depositRequest.description = depositDescription;
         await depositRequest.save({ transaction: dbTransaction });
+
+        if (couponApplied && cashbackAmount > 0) {
+            await Deposit.create({
+                accountId: destinationAccount.id,
+                type: 'DEPOSITO',
+                amount: cashbackAmount.toFixed(2),
+                description: 'Bono cashback por depósito realizado',
+                balanceAfter: finalBalance.toFixed(2),
+                status: 'COMPLETADA',
+                appliedCouponId: depositRequest.appliedCouponId
+            }, { transaction: dbTransaction });
+        }
 
         await dbTransaction.commit();
 

@@ -99,11 +99,21 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
 
     const expectedPromoType = operationToPromoTypeMap[operationType];
 
+    const hasCashbackBenefit = Boolean(
+      (promotion.cashbackAmount !== null && promotion.cashbackAmount !== undefined && Number(promotion.cashbackAmount) > 0) ||
+      (promotion.cashbackPercentage !== null && promotion.cashbackPercentage !== undefined && Number(promotion.cashbackPercentage) > 0) ||
+      (promotion.discountPercentage !== null && promotion.discountPercentage !== undefined && Number(promotion.discountPercentage) > 0)
+    );
+
     if (promotion.promotionType !== expectedPromoType) {
-      return {
-        valid: false,
-        message: `Cupón inválido: esta promoción no aplica para ${operationType.toLowerCase().replace('_', ' ')}`
-      };
+      const canUseAsGenericCashback = ['PRIMER_DEPOSITO', 'TRANSFERENCIA_RECIBIDA'].includes(operationType) && hasCashbackBenefit;
+
+      if (!canUseAsGenericCashback) {
+        return {
+          valid: false,
+          message: `Cupón inválido: esta promoción no aplica para ${operationType.toLowerCase().replace('_', ' ')}`
+        };
+      }
     }
 
     let benefit = null;
@@ -179,6 +189,9 @@ export const validateAndApplyCoupon = async (couponId, operationType, amount, db
           message: 'Cupón inválido: tipo de promoción no soportado'
         };
     }
+
+    // Incrementar el contador de usos de la promoción
+    await incrementPromotionUsage(promotion._id);
 
     return {
       valid: true,
