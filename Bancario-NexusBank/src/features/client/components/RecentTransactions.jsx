@@ -53,10 +53,18 @@ export const RecentTransactions = ({ transactions }) => {
     }
   };
 
-  const getAmountSign = (type) => {
+  const getAmountSign = (type, amount) => {
     const lowerType = type?.toLowerCase();
+    // Explicit incoming types
     if (lowerType === 'deposit' || lowerType === 'ingreso') return '+';
+    // Explicit outgoing types
     if (lowerType === 'withdrawal' || lowerType === 'retiro') return '-';
+    // For transfers or unknown types: coerce amount to number and decide
+    const amt = Number(amount);
+    if (!Number.isNaN(amt)) {
+      if (amt > 0) return '+';
+      if (amt < 0) return '-';
+    }
     return '';
   };
 
@@ -92,7 +100,7 @@ export const RecentTransactions = ({ transactions }) => {
 
             <div className={`text-right font-semibold ${getTransactionColor(transaction.type)}`}>
               <p>
-                {getAmountSign(transaction.type)} {(transaction.amount || 0).toLocaleString('es-GT', {
+                {getAmountSign(transaction.type, transaction.amount)} {(transaction.amount || 0).toLocaleString('es-GT', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
@@ -105,7 +113,9 @@ export const RecentTransactions = ({ transactions }) => {
         ))}
       </div>
 
-      <button className="mt-6 w-full rounded-lg border-2 border-[#2D5899] py-2 text-[#2D5899] font-medium hover:bg-[#2D5899] hover:text-white transition-colors">
+      <button className="mt-6 w-full rounded-lg border-2 border-[#2D5899] py-2 text-[#2D5899] font-medium hover:bg-[#2D5899] hover:text-white transition-colors" onClick={() => {
+        window.location.href = '#/clientdashboard/account-history';
+      }}>
         Ver todos los movimientos
       </button>
     </Card>

@@ -59,11 +59,11 @@ export const validateEditOwnProfile = [
     .isFloat({ min: 0 })
     .withMessage('Los ingresos mensuales deben ser un número positivo'),
   body().custom((value) => {
-    const editableFields = ['name', 'fullName', 'username', 'address', 'jobName', 'income'];
+    const editableFields = ['name', 'fullName', 'username', 'address', 'jobName', 'income', 'fraudAlerts', 'profilePhotoUrl'];
     const hasAtLeastOneField = editableFields.some((field) => value[field] !== undefined);
 
     if (!hasAtLeastOneField) {
-      throw new Error('Debes enviar al menos un campo editable: nombre (name/fullName), nombre de usuario (username), dirección (address), nombre del trabajo (jobName) o ingresos mensuales (income)');
+      throw new Error('Debes enviar al menos un campo editable: nombre (name/fullName), nombre de usuario (username), dirección (address), nombre del trabajo (jobName), ingresos mensuales (income) o alertas de fraude (fraudAlerts)');
     }
 
     return true;

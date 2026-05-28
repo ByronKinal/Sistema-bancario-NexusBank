@@ -8,7 +8,6 @@ import { MdEdit, MdPause, MdClose, MdCheck, MdPlayArrow, MdAdd, MdArrowForward }
 import '../../../../styles/promotions.css';
 
 const PROMOTION_TYPES = [
-  'APERTURA_CUENTA_BONUS',
   'PRIMER_DEPOSITO_BONUS',
   'TRANSFERENCIA_RECIBIDA_BONUS'
 ];
@@ -18,7 +17,6 @@ const ITEMS_PER_PAGE = 5;
 
 const formatPromotionType = (type) => {
   const typeMap = {
-    'APERTURA_CUENTA_BONUS': 'Apertura de Cuenta Bonus',
     'PRIMER_DEPOSITO_BONUS': 'Primer Depósito Bonus',
     'TRANSFERENCIA_RECIBIDA_BONUS': 'Transferencia Recibida Bonus'
   };
@@ -55,6 +53,7 @@ const PromotionsManagementView = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('create'); // 'create' o 'edit'
   const [selectedPromotion, setSelectedPromotion] = useState(null);
+  const [pendingConfirm, setPendingConfirm] = useState(null);
 
   // Fetch de promociones
   const fetchPromotions = async () => {
@@ -156,27 +155,21 @@ const PromotionsManagementView = () => {
   };
 
   // Cambiar estado de promoción
-  const handleChangeStatus = async (promotion, newStatus) => {
+  const handleChangeStatus = (promotion, newStatus) => {
     const statusLabels = {
       'ACTIVA': 'Activar',
       'INACTIVA': 'Desactivar',
       'PAUSADA': 'Pausar',
       'EXPIRADA': 'Marcar como expirada'
     };
-    
-    if (!window.confirm(`¿Estás seguro de que deseas ${statusLabels[newStatus]} la promoción "${promotion.name}"?`)) {
-      return;
-    }
-
-    try {
-      await adminDashboardService.updatePromotionStatus(promotion.id || promotion._id, newStatus);
-      showSuccess(`Promoción ${statusLabels[newStatus].toLowerCase()} exitosamente`);
-      fetchPromotions();
-    } catch (error) {
-      console.error('Error changing promotion status:', error);
-      const message = error.response?.data?.message || error.message || 'Error al cambiar estado de promoción';
-      showError(message);
-    }
+    setPendingConfirm({
+      type: 'status',
+      promotionId: promotion.id || promotion._id,
+      promotionName: promotion.name,
+      newStatus,
+      actionLabel: `${statusLabels[newStatus]} la promoción`,
+      confirmLabel: statusLabels[newStatus],
+    });
   };
 
   const handleStatusToggle = async (promotion) => {
@@ -190,14 +183,34 @@ const PromotionsManagementView = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta promoción?')) return;
+  const handleDelete = (promotion) => {
+    setPendingConfirm({
+      type: 'delete',
+      promotionId: promotion.id || promotion._id,
+      promotionName: promotion.name,
+      actionLabel: 'Eliminar la promoción',
+      confirmLabel: 'Eliminar',
+    });
+  };
+
+  const closeConfirm = () => setPendingConfirm(null);
+
+  const handleConfirmAction = async () => {
+    if (!pendingConfirm) return;
+
     try {
-      await adminDashboardService.deletePromotion(id);
-      showSuccess('Promoción eliminada con éxito');
+      if (pendingConfirm.type === 'status') {
+        await adminDashboardService.updatePromotionStatus(pendingConfirm.promotionId, pendingConfirm.newStatus);
+        showSuccess(`Promoción ${pendingConfirm.confirmLabel.toLowerCase()} exitosamente`);
+      } else {
+        await adminDashboardService.deletePromotion(pendingConfirm.promotionId);
+        showSuccess('Promoción eliminada con éxito');
+      }
       fetchPromotions();
+      closeConfirm();
     } catch (error) {
-      showError(error.response?.data?.message || 'Error al eliminar');
+      console.error('Error changing promotion action:', error);
+      showError(error.response?.data?.message || error.message || 'Error al procesar la promoción');
     }
   };
 
@@ -496,6 +509,36 @@ const PromotionsManagementView = () => {
           onClose={closeModal}
           onSave={handlePromotionSaved}
         />
+      )}
+
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-white/30 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+            <div className="bg-gradient-to-r from-[#1A2E52] to-[#2D5899] px-6 py-5 text-white">
+              <p className="text-xs uppercase tracking-[0.28em] text-[#C8D9FF]">Confirmación</p>
+              <h3 className="mt-2 text-2xl font-bold">{pendingConfirm.actionLabel}</h3>
+            </div>
+            <div className="space-y-3 px-6 py-5 text-sm text-gray-700">
+              <p>Vas a <strong>{pendingConfirm.actionLabel.toLowerCase()}</strong> <strong>{pendingConfirm.promotionName}</strong>.</p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-100 bg-[#F8FAFC] px-6 py-4">
+              <button
+                type="button"
+                onClick={closeConfirm}
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAction}
+                className="rounded-xl bg-[#1A2E52] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2D5899]"
+              >
+                {pendingConfirm.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

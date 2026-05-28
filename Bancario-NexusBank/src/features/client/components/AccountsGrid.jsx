@@ -1,18 +1,10 @@
 import { Card } from '@material-tailwind/react';
+import { useNavigate } from 'react-router-dom';
 import { FaWallet, FaArrowRight } from 'react-icons/fa';
 
-const getAccountTypeLabel = (account) => {
-  const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
-
-  if (!rawType) return 'Cuenta';
-  if (rawType.includes('corrient') || rawType.includes('monetar')) return 'Cuenta corriente';
-  if (rawType.includes('ahor')) return 'Cuenta de ahorro';
-  if (rawType.startsWith('cuenta')) return rawType.charAt(0).toUpperCase() + rawType.slice(1);
-
-  return `Cuenta ${rawType}`;
-};
-
 export const AccountsGrid = ({ accounts }) => {
+  const navigate = useNavigate();
+
   if (!accounts || accounts.length === 0) {
     return (
       <Card className="p-6 text-center">
@@ -57,9 +49,13 @@ export const AccountsGrid = ({ accounts }) => {
 
           <div className="px-4 py-3">
             <p className="text-xs text-gray-600 mb-2">
-              {getAccountTypeLabel(account)}
+              {account.accountType || 'Cuenta'}
             </p>
-            <button className="w-full flex items-center justify-center gap-2 text-[#2D5899] hover:text-[#C8A84B] font-medium text-sm transition-colors">
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 text-[#2D5899] hover:text-[#C8A84B] font-medium text-sm transition-colors"
+              onClick={() => navigate(`/clientdashboard/accounts?accountId=${encodeURIComponent(account.id || account.accountNumber || '')}`)}
+            >
               Ver detalles
               <FaArrowRight size={12} />
             </button>

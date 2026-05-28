@@ -133,7 +133,7 @@
   flex-wrap: wrap;
 }
 
-.search-bar {
+.history-search-bar {
   flex: 1;
   min-width: 250px;
   display: flex;
@@ -145,17 +145,17 @@
   transition: all 0.2s;
 }
 
-.search-bar:focus-within {
+.history-search-bar:focus-within {
   border-color: #2D5899;
   box-shadow: 0 0 0 3px rgba(45, 88, 153, 0.1);
 }
 
-.search-icon {
+.history-search-icon {
   color: #8AABC9;
   font-size: 0.95rem;
 }
 
-.search-input {
+.history-search-input {
   flex: 1;
   border: none;
   outline: none;
@@ -164,7 +164,7 @@
   color: #1A2E52;
 }
 
-.search-input::placeholder {
+.history-search-input::placeholder {
   color: #8AABC9;
 }
 
@@ -229,7 +229,7 @@
 
 /* Make selects and search inputs consistent and prevent clipping */
 .filter-select,
-.search-input {
+.history-search-input {
   box-sizing: border-box;
   height: 44px;
   padding: 10px 36px 10px 12px;

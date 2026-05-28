@@ -3,11 +3,13 @@ import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import { useNavigate } from 'react-router-dom';
 import { FaBell } from 'react-icons/fa';
+import ConfirmModal from '../../../components/ConfirmModal.jsx';
 
 const AdminNotifications = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmAction, setConfirmAction] = useState(null);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
 
@@ -37,25 +39,27 @@ const AdminNotifications = () => {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  const handleApprove = async (id) => {
-    if (!window.confirm('¿Aprobar esta solicitud?')) return;
-    try {
-      await adminDashboardService.approveAccountRequest(id);
-      showSuccess('Solicitud aprobada - Cuenta creada');
-      fetchPending();
-    } catch (e) {
-      showError(e.response?.data?.message || 'Error al aprobar');
-    }
+  const openConfirm = (action, req) => {
+    setConfirmAction({ action, id: req.id, accountType: req.accountType });
   };
 
-  const handleReject = async (id) => {
-    if (!window.confirm('¿Rechazar esta solicitud?')) return;
+  const closeConfirm = () => setConfirmAction(null);
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+
     try {
-      await adminDashboardService.rejectAccountRequest(id);
-      showSuccess('Solicitud rechazada');
+      if (confirmAction.action === 'approve') {
+        await adminDashboardService.approveAccountRequest(confirmAction.id);
+        showSuccess('Solicitud aprobada - Cuenta creada');
+      } else {
+        await adminDashboardService.rejectAccountRequest(confirmAction.id);
+        showSuccess('Solicitud rechazada');
+      }
+      closeConfirm();
       fetchPending();
     } catch (e) {
-      showError(e.response?.data?.message || 'Error al rechazar');
+      showError(e.response?.data?.message || (confirmAction.action === 'approve' ? 'Error al aprobar' : 'Error al rechazar'));
     }
   };
 
@@ -96,8 +100,8 @@ const AdminNotifications = () => {
                     <div style={{ fontSize: 12, color: '#9fb3d6' }}>Solicitado: {new Date(req.createdAt).toLocaleString()}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => handleApprove(req.id)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Aprobar</button>
-                    <button onClick={() => handleReject(req.id)} style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Rechazar</button>
+                    <button onClick={() => openConfirm('approve', req)} style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Aprobar</button>
+                    <button onClick={() => openConfirm('reject', req)} style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Rechazar</button>
                   </div>
                 </div>
               ))
@@ -105,6 +109,18 @@ const AdminNotifications = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmAction}
+        title={confirmAction?.action === 'approve' ? 'Aprobar solicitud' : 'Rechazar solicitud'}
+        message={confirmAction?.action === 'approve'
+          ? `¿Deseas aprobar esta solicitud de apertura${confirmAction?.accountType ? ` (${confirmAction.accountType})` : ''}?`
+          : `¿Deseas rechazar esta solicitud de apertura${confirmAction?.accountType ? ` (${confirmAction.accountType})` : ''}?`}
+        confirmLabel={confirmAction?.action === 'approve' ? 'Aprobar' : 'Rechazar'}
+        tone={confirmAction?.action === 'approve' ? 'primary' : 'danger'}
+        onConfirm={handleConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };

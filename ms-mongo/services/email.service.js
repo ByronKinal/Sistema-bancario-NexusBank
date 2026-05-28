@@ -522,7 +522,7 @@ export const sendFailedAttemptEmail = async (email, name, attemptData = {}) => {
                     </div>
 
                     <div class="info-box" style="border-left-color: #dc2626; background: #fee2e2;">
-                        <p class="warning">⚠️ ATENCIÓN: Si acumulas 3 intentos fallidos en 1 hora, tu cuenta será bloqueada por 30 minutos.</p>
+                        <p class="warning"> ATENCIÓN: Si acumulas 3 intentos fallidos en 1 hora, tu cuenta será bloqueada por 30 minutos.</p>
                         <p class="warning">Intentos registrados en tu sesión: ${attemptNumber || 1} de 3</p>
                     </div>
 

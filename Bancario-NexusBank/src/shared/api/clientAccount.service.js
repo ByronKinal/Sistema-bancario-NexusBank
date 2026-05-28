@@ -116,12 +116,21 @@ export const clientAccountService = {
   // Obtener datos del dashboard
   getDashboardData: async () => {
     try {
-      const [account, profile, transactions, accounts] = await Promise.all([
+      const [account, profile, transactionsRaw, accounts] = await Promise.all([
         clientAccountService.getMainAccount(),
         clientAccountService.getUserProfile(),
         clientAccountService.getRecentTransactions(5),
         clientAccountService.getAllAccounts(),
       ]);
+
+      // Normalizar transactions: algunos endpoints devuelven un objeto { transactions, pagination, summary }
+      let transactions = [];
+      if (Array.isArray(transactionsRaw)) transactions = transactionsRaw;
+      else if (transactionsRaw && Array.isArray(transactionsRaw.transactions)) transactions = transactionsRaw.transactions;
+
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        console.warn('[clientAccountService] dashboard: no transactions returned from API', { transactionsRaw });
+      }
 
       return {
         account,
@@ -191,6 +200,21 @@ export const clientAccountService = {
       }
       console.error('Error fetching transaction detail:', error);
       throw error;
+    }
+  }
+,
+
+  // Obtener tasa de cambio desde el backend (usa /my-account/balance/convert)
+  getExchangeRate: async (targetCurrency, accountId) => {
+    try {
+      const params = new URLSearchParams();
+      if (accountId) params.append('accountId', accountId);
+      if (targetCurrency) params.append('targetCurrency', targetCurrency);
+      const response = await getFromBankingApi(`/my-account/balance/convert?${params.toString()}`);
+      return response.data?.data?.exchangeRate ?? null;
+    } catch (error) {
+      console.error('Error fetching exchange rate:', error);
+      return null;
     }
   }
 };

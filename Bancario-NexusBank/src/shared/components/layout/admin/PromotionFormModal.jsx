@@ -4,7 +4,6 @@ import { showError, showSuccess } from '../../../utils/toast.js';
 import { MdAdd, MdEdit, MdClose, MdWarning, MdArrowDropDown, MdArrowRight, MdHourglassEmpty, MdCheck } from 'react-icons/md';
 
 const PROMOTION_TYPES = [
-  'APERTURA_CUENTA_BONUS',
   'PRIMER_DEPOSITO_BONUS',
   'TRANSFERENCIA_RECIBIDA_BONUS'
 ];
@@ -48,7 +47,6 @@ const EDITABLE_FIELDS = new Set([
 
 const formatPromotionType = (type) => {
   const typeMap = {
-    'APERTURA_CUENTA_BONUS': 'Apertura de Cuenta Bonus',
     'PRIMER_DEPOSITO_BONUS': 'Primer Depósito Bonus',
     'TRANSFERENCIA_RECIBIDA_BONUS': 'Transferencia Recibida Bonus'
   };

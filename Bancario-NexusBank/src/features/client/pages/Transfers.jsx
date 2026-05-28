@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { useClientStore } from '../store/useClientStore.js';
 import { clientTransferService } from '../../../shared/api/clientTransfer.service.js';
+import { clientAccountService } from '../../../shared/api/clientAccount.service.js';
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved } from '../../../shared/utils/reversalRequests.js';
+import RevertModal from '../../../shared/components/RevertModal.jsx';
 
 const DAILY_TRANSFER_LIMIT = 2000;
 
@@ -271,7 +273,7 @@ export const Transfers = () => {
         <div class="row"><span>Descripción</span><span>${transfer.description || 'Sin descripción'}</span></div>
         <div class="note">Transferencia registrada correctamente. Conserva esta constancia para tu control interno.</div>
       </div>
-    </div>
+      </div>
   </div>
   ${autoPrint ? '<script>window.onload = function() { window.print(); };</script>' : ''}
 </body>
@@ -396,12 +398,34 @@ export const Transfers = () => {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    (async () => {
+      const payload = buildTransferPayload();
+      if (!payload) return;
 
-    const payload = buildTransferPayload();
-    if (!payload) return;
+      // Si la moneda no es GTQ, consultar tasa al backend para validar el límite Q2,000
+      const actualCurrency = payload.currency || 'GTQ';
+      let amountInGTQ = Number(payload.amount || 0);
 
-    setPendingTransfer(payload);
-    setCurrentStep(2);
+      if (actualCurrency !== 'GTQ') {
+        const srcAccount = sourceAccount;
+        const rate = await clientAccountService.getExchangeRate(actualCurrency, srcAccount?.id);
+        if (rate && Number(rate) > 0) {
+          // Según backend: rate = TARGET per GTQ -> para convertir TARGET -> GTQ hacemos amount / rate
+          amountInGTQ = Number(payload.amount) / Number(rate);
+        } else {
+          // fallback: usar estimado cliente (convertToGTQ) si no hay rate
+          amountInGTQ = convertToGTQ(Number(payload.amount), actualCurrency);
+        }
+      }
+
+      if (amountInGTQ > DAILY_TRANSFER_LIMIT) {
+        showError(`El límite permitido por transferencia es Q${DAILY_TRANSFER_LIMIT.toLocaleString('es-GT', {minimumFractionDigits:2})}. Equivalente ingresado: Q${amountInGTQ.toLocaleString('es-GT', {minimumFractionDigits:2})}.`);
+        return;
+      }
+
+      setPendingTransfer(payload);
+      setCurrentStep(2);
+    })();
   };
 
   const handleConfirmTransfer = async () => {
@@ -462,11 +486,27 @@ export const Transfers = () => {
       || String(transfer.reference) === String(latestReversibleTransaction.reference);
   };
 
-  const handleRequestReversal = (transfer) => {
-    if (!transfer) return;
+  const isWithinRevertWindow = (transfer, windowMs = 60000) => {
+    if (!transfer) return false;
+    const created = new Date(transfer.date || transfer.createdAt || transfer.raw?.createdAt || 0).getTime();
+    if (!created) return false;
+    return (Date.now() - created) <= windowMs;
+  };
 
-    const reason = window.prompt('Describe por qué quieres revertir esta transferencia:') || '';
-    if (!reason.trim()) {
+  const [showRevertModal, setShowRevertModal] = useState(false);
+  const [revertTarget, setRevertTarget] = useState(null);
+
+  const openRevertModal = (transfer) => {
+    setRevertTarget(transfer);
+    setShowRevertModal(true);
+  };
+
+  const handleConfirmRevert = (reason) => {
+    const transfer = revertTarget;
+    setShowRevertModal(false);
+    setRevertTarget(null);
+    if (!transfer) return;
+    if (!reason || !reason.trim()) {
       showError('Debes escribir un motivo para enviar la reversión.');
       return;
     }
@@ -561,7 +601,7 @@ export const Transfers = () => {
                 <div>
                   <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Cuenta origen</label>
                   <select
-                    className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                    className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                     value={sourceAccountNumber}
                     onChange={(e) => setSourceAccountNumber(e.target.value)}
                   >
@@ -578,7 +618,7 @@ export const Transfers = () => {
                   <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Cuenta destino</label>
                   {recipientType === 'PROPIA' ? (
                     <select
-                      className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                       value={destinationAccountNumber}
                       onChange={(e) => setDestinationAccountNumber(e.target.value)}
                     >
@@ -592,7 +632,7 @@ export const Transfers = () => {
                   ) : (
                     <input
                       type="text"
-                      className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                       placeholder="Ej: 001-9999999999-9"
                       value={destinationAccountNumber}
                       onChange={(e) => setDestinationAccountNumber(e.target.value)}
@@ -603,7 +643,7 @@ export const Transfers = () => {
                 <div>
                   <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Tipo de destinatario</label>
                   <select
-                    className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                    className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                     value={recipientType}
                     onChange={(e) => setRecipientType(e.target.value)}
                   >
@@ -634,13 +674,13 @@ export const Transfers = () => {
                         value={customCurrency}
                         onChange={(e) => setCustomCurrency(e.target.value.toUpperCase())}
                         placeholder="Ej. CLP"
-                        className="w-[100px] rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none uppercase"
+                        className="w-[100px] rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none uppercase"
                       />
                     ) : (
                       <select
                         value={currency}
                         onChange={(e) => setCurrency(e.target.value)}
-                        className="w-[100px] rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                        className="w-[100px] rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                       >
                         <option value="GTQ">GTQ</option>
                         <option value="USD">USD</option>
@@ -655,7 +695,7 @@ export const Transfers = () => {
                       min="1"
                       max={currentSelectedCurrency === 'GTQ' ? DAILY_TRANSFER_LIMIT : undefined}
                       step="0.01"
-                      className="flex-1 rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      className="flex-1 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                       placeholder="0.00"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
@@ -667,7 +707,7 @@ export const Transfers = () => {
                   <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Referencia / descripción</label>
                   <input
                     type="text"
-                    className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                    className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                     placeholder="Ej: Pago de prueba"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -679,7 +719,7 @@ export const Transfers = () => {
                     <label className="block text-sm font-semibold text-[#1A2E52] mb-2">Código de cupón (Opcional)</label>
                     <input
                       type="text"
-                      className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                      className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                       placeholder="Ej: cat_123..."
                       value={couponId}
                       onChange={(e) => setCouponId(e.target.value)}
@@ -876,8 +916,9 @@ export const Transfers = () => {
                         {canReverseTransfer(item) && (
                           <button
                             type="button"
-                            onClick={() => handleRequestReversal(item)}
-                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
+                            onClick={() => openRevertModal(item)}
+                            disabled={!isWithinRevertWindow(item)}
+                            className={`rounded-full px-4 py-2 text-xs font-semibold border ${isWithinRevertWindow(item) ? 'border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white' : 'border-gray-200 text-gray-400 bg-white cursor-not-allowed' } transition`}
                           >
                             Revertir
                           </button>
@@ -891,6 +932,21 @@ export const Transfers = () => {
           </section>
         </aside>
       </div>
+
+      {showRevertModal && (
+        <RevertModal
+          open={showRevertModal}
+          onClose={() => {
+            setShowRevertModal(false);
+            setRevertTarget(null);
+          }}
+          onConfirm={handleConfirmRevert}
+          title={`Revertir transferencia ${revertTarget?.reference || revertTarget?.id || ''}`}
+          createdAt={revertTarget?.date || revertTarget?.createdAt || revertTarget?.raw?.createdAt}
+        />
+      )}
     </div>
   );
 };
+ 
+export default Transfers;

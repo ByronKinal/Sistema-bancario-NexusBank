@@ -167,7 +167,7 @@ const Favorites = () => {
                 value={form.accountNumber}
                 onChange={(e) => setForm((prev) => ({ ...prev, accountNumber: e.target.value }))}
                 readOnly={isEditing}
-                className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none read-only:opacity-80"
+                className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none read-only:opacity-80"
                 placeholder="Ej: 001-9115890794-1"
               />
             </div>
@@ -177,7 +177,7 @@ const Favorites = () => {
               <select
                 value={form.accountType}
                 onChange={(e) => setForm((prev) => ({ ...prev, accountType: e.target.value }))}
-                className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
               >
                 <option value="ahorro">ahorro</option>
                 <option value="corriente">corriente</option>
@@ -190,7 +190,7 @@ const Favorites = () => {
                 type="text"
                 value={form.alias}
                 onChange={(e) => setForm((prev) => ({ ...prev, alias: e.target.value }))}
-                className="w-full rounded-2xl border border-gray-300 bg-[#2D2B28] text-white px-4 py-3 focus:border-[#2D5899] focus:outline-none"
+                className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-[#1A2E52] focus:border-[#2D5899] focus:outline-none"
                 placeholder="Ej: Mama"
               />
             </div>
@@ -255,14 +255,14 @@ const Favorites = () => {
                     <button
                       type="button"
                       onClick={() => goToTransfer(favorite)}
-                      className="rounded-xl bg-[#1A2E52] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2D5899] transition"
+                      className="rounded-xl border border-[#2D5899] bg-white px-3 py-2 text-sm font-semibold text-[#2D5899] hover:bg-[#2D5899] hover:text-white transition"
                     >
                       Transferencia rapida
                     </button>
                     <button
                       type="button"
                       onClick={() => goToDeposit(favorite)}
-                      className="rounded-xl bg-[#2D5899] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1A2E52] transition"
+                      className="rounded-xl border border-[#2D5899] bg-white px-3 py-2 text-sm font-semibold text-[#2D5899] hover:bg-[#2D5899] hover:text-white transition"
                     >
                       Deposito rapido
                     </button>

@@ -3,6 +3,7 @@ import EmployeeLayout from './EmployeeLayout.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import { getReversalRequests } from '../../../utils/reversalRequests.js';
+import ConfirmModal from '../../../components/ConfirmModal.jsx';
 import '../../../../styles/adminDashboard.css';
 
 const EmployeDashnoardContainer = () => {
@@ -13,10 +14,10 @@ const EmployeDashnoardContainer = () => {
     const [filterStatus, setFilterStatus] = useState('TODOS');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newAccountNumber, setNewAccountNumber] = useState('');
-    const [newAccountType, setNewAccountType] = useState('ahorro');
     const [newAmount, setNewAmount] = useState('');
     const [foundAccountName, setFoundAccountName] = useState(null);
     const [lookupLoading, setLookupLoading] = useState(false);
+    const [confirmAction, setConfirmAction] = useState(null);
 
     const getDisplayStatus = (status) => {
         if (status === 'PENDIENTE') return 'PENDIENTE';
@@ -32,8 +33,17 @@ const EmployeDashnoardContainer = () => {
 
     const getDepositMethodLabel = (channel) => {
         if (!channel) return 'Ventanilla / caja';
-        if (channel.toLowerCase().includes('transferencia')) return 'Ventanilla / caja';
+        const s = channel.toString().toLowerCase();
+        if (s.includes('ventanilla') || s.includes('caja')) return 'Ventanilla / caja';
         return channel;
+    };
+
+    const normalizeAccountType = (raw) => {
+        const s = (raw || '').toString().trim().toLowerCase();
+        if (!s) return '';
+        if (s.includes('ahorr')) return 'ahorro';
+        if (s.includes('corrient')) return 'corriente';
+        return s;
     };
 
     const getApprovedReversalKeys = () => {
@@ -58,7 +68,8 @@ const EmployeDashnoardContainer = () => {
                     amount: Number(dep.amount || 0),
                     status: dep.status || 'PENDIENTE',
                     accountNumber: dep.Account?.accountNumber || 'N/D',
-                    bank: dep.Account?.accountType || 'Banco Interno',
+                    // normalize account type to singular lowercase (e.g., 'ahorro')
+                    bank: normalizeAccountType(dep.Account?.accountType) || 'interno',
                     userId: dep.relatedAccountId || 'N/D',
                     description: dep.description || 'Pago por servicio',
                     date: dep.createdAt || dep.updatedAt || new Date().toISOString(),
@@ -71,10 +82,31 @@ const EmployeDashnoardContainer = () => {
                 : [];
 
             const approvedReversalKeys = getApprovedReversalKeys();
+            // Exclude non-deposit entries: try to be conservative and only include items that look like deposits
+            const looksLikeDeposit = (dep) => {
+                const raw = dep.raw || {};
+                const checkFields = [raw.type, raw.transactionType, raw.kind, raw.operation, dep.method, raw.channel, dep.description];
+                const joined = checkFields.filter(Boolean).map((s) => String(s).toLowerCase()).join(' ');
+
+                // negative indicators (transferencias)
+                if (joined.includes('transfer') || joined.includes('transferencia') || joined.includes('trx') || joined.includes('wire')) return false;
+
+                // positive indicators explicitly pointing to deposits
+                if (joined.includes('deposit') || joined.includes('depósito') || joined.includes('deposito') || joined.includes('ventanilla') || joined.includes('caja')) return true;
+
+                // If there is a raw.type-like field and it doesn't mention transfer, and we have account info, consider it a deposit
+                const hasRawType = Boolean(raw.type || raw.transactionType || raw.kind || raw.operation);
+                if (hasRawType && dep.amount && dep.accountNumber && dep.accountNumber !== 'N/D') return true;
+
+                // conservative default: do not assume deposit
+                return false;
+            };
+
             const visibleDeposits = normalized.filter((dep) => {
                 const depositId = String(dep.id || '');
                 const depositReference = String(dep.reference || '');
-                return !approvedReversalKeys.has(depositId) && !approvedReversalKeys.has(depositReference);
+                if (approvedReversalKeys.has(depositId) || approvedReversalKeys.has(depositReference)) return false;
+                return looksLikeDeposit(dep);
             });
 
             setDeposits(visibleDeposits);
@@ -128,9 +160,8 @@ const EmployeDashnoardContainer = () => {
                 const target = norm(cleaned);
                 const found = (Array.isArray(accounts) ? accounts : []).find((a) => {
                     const accNum = norm(a.accountNumber || a.number || a.account || '');
-                    const type = (a.accountType || a.type || '').toString().toLowerCase();
-                    const typeMatch = !newAccountType || type.includes(newAccountType.toLowerCase());
-                    return typeMatch && (accNum === target || accNum.includes(target) || target.includes(accNum));
+                    // No filtrar por tipo de cuenta aquí
+                    return (accNum === target || accNum.includes(target) || target.includes(accNum));
                 });
 
                 if (!cancelled) {
@@ -163,7 +194,7 @@ const EmployeDashnoardContainer = () => {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [newAccountNumber, newAccountType, showCreateModal]);
+    }, [newAccountNumber, showCreateModal]);
 
     
 
@@ -190,13 +221,26 @@ const EmployeDashnoardContainer = () => {
         total: deposits.length
     };
 
-    const handleApprove = async (deposit) => {
+    const openApproveConfirm = (deposit) => {
         if (deposit.status !== 'PENDIENTE') return;
-        if (!window.confirm('¿Aprobar este depósito?')) return;
+        setConfirmAction({
+            type: 'approveDeposit',
+            depositId: deposit.id,
+            accountNumber: deposit.accountNumber,
+            amount: deposit.amount,
+            userId: deposit.userId,
+        });
+    };
+
+    const closeConfirm = () => setConfirmAction(null);
+
+    const handleConfirmApprove = async () => {
+        if (!confirmAction || confirmAction.type !== 'approveDeposit') return;
 
         try {
-            await adminDashboardService.approveDeposit(deposit.id);
+            await adminDashboardService.approveDeposit(confirmAction.depositId);
             showSuccess('Depósito aprobado correctamente.');
+            closeConfirm();
             fetchDeposits();
         } catch (error) {
             showError(error.response?.data?.message || 'Error al aprobar el depósito');
@@ -205,7 +249,6 @@ const EmployeDashnoardContainer = () => {
 
     const handleReject = async (deposit) => {
         if (deposit.status !== 'PENDIENTE') return;
-        if (!window.confirm('¿Rechazar este depósito?')) return;
 
         try {
             await adminDashboardService.rejectDeposit(deposit.id);
@@ -229,7 +272,7 @@ const EmployeDashnoardContainer = () => {
                             <div className="mt-2 sm:mt-0">
                                 <button
                                     type="button"
-                                    onClick={() => { setShowCreateModal(true); setNewAccountNumber(''); setNewAccountType('ahorro'); setFoundAccountName(null); }}
+                                    onClick={() => { setShowCreateModal(true); setNewAccountNumber(''); setFoundAccountName(null); }}
                                     className="px-4 py-2 rounded-lg font-semibold"
                                     style={{ backgroundColor: '#d4a017', color: '#0f172a' }}
                                 >
@@ -267,13 +310,6 @@ const EmployeDashnoardContainer = () => {
                                     <p className="text-sm text-gray-500 mt-1">Selecciona un depósito para ver el detalle completo.</p>
                                 </div>
                                 <div className="filters-container">
-                                    <input
-                                        type="text"
-                                        className="search-input"
-                                        placeholder="Buscar referencia, cuenta o banco..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
                                     <select
                                         className="filter-select"
                                         value={filterStatus}
@@ -328,7 +364,7 @@ const EmployeDashnoardContainer = () => {
                                                                 type="button"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    handleApprove(deposit);
+                                                                    openApproveConfirm(deposit);
                                                                 }}
                                                                 disabled={deposit.status !== 'PENDIENTE'}
                                                                 className={`px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition ${deposit.status === 'PENDIENTE' ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 cursor-not-allowed'}`}
@@ -394,7 +430,7 @@ const EmployeDashnoardContainer = () => {
                                     <div className="grid gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => handleApprove(selectedDeposit)}
+                                            onClick={() => openApproveConfirm(selectedDeposit)}
                                             disabled={selectedDeposit.status !== 'PENDIENTE'}
                                             className="rounded-2xl bg-green-600 text-white py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
@@ -417,8 +453,7 @@ const EmployeDashnoardContainer = () => {
                         <div className="modal-card">
                             <div className="modal-header">
                                 <h4 className="text-lg font-bold">Crear Depósito — Datos</h4>
-                                <button className="text-gray-500" onClick={() => setShowCreateModal(false)}>Cerrar</button>
-                            </div>
+                                </div>
 
                             <div className="modal-body">
                                 <label className="block text-sm font-semibold mb-1">Número de Cuenta</label>
@@ -430,15 +465,7 @@ const EmployeDashnoardContainer = () => {
                                     className="w-full p-2 border rounded mb-3"
                                 />
 
-                                <label className="block text-sm font-semibold mb-1">Tipo de Cuenta</label>
-                                <select
-                                    value={newAccountType}
-                                    onChange={(e) => setNewAccountType(e.target.value)}
-                                    className="w-full p-2 border rounded mb-3"
-                                >
-                                    <option value="ahorro">Ahorro</option>
-                                    <option value="corriente">Corriente</option>
-                                </select>
+                                {/* Tipo de Cuenta eliminado: no se requiere validación */}
 
                                     <label className="block text-sm font-semibold mb-1">Monto</label>
                                     <input
@@ -482,7 +509,6 @@ const EmployeDashnoardContainer = () => {
                                                 showSuccess('Depósito creado correctamente.');
                                                 setShowCreateModal(false);
                                                 setNewAccountNumber('');
-                                                setNewAccountType('ahorro');
                                                 setNewAmount('');
                                                 setFoundAccountName(null);
                                                 // refrescar lista
@@ -501,6 +527,18 @@ const EmployeDashnoardContainer = () => {
                         </div>
                     </div>
                 )}
+
+                <ConfirmModal
+                    open={!!confirmAction}
+                    title="Aprobar depósito"
+                    message={confirmAction
+                        ? `¿Deseas aprobar el depósito de Q${Number(confirmAction.amount || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })} para la cuenta ${confirmAction.accountNumber || 'sin número'}?`
+                        : ''}
+                    confirmLabel="Aprobar"
+                    tone="primary"
+                    onConfirm={handleConfirmApprove}
+                    onCancel={closeConfirm}
+                />
             </section>
         </EmployeeLayout>
     );

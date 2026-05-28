@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AdminNavbar from './AdminNavbar.jsx';
 import AdminSidebar from './AdminSidebar.jsx';
 import AdminAddUserModal from './AdminAddUserModal.jsx';
+import ConfirmModal from '../../../components/ConfirmModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 import '../../../../styles/adminDashboard.css';
@@ -13,6 +14,7 @@ const PendingRequestsView = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('PENDIENTE');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState(null);
 
   const fetchRequests = async () => {
     try {
@@ -65,8 +67,13 @@ const PendingRequestsView = () => {
     fetchRequests();
   }, []);
 
+  const openConfirm = (action, req = null) => {
+    setPendingConfirm({ action, req });
+  };
+
+  const closeConfirm = () => setPendingConfirm(null);
+
   const handleApprove = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar la cuenta de ${req.userName}?`)) return;
     try {
       if (req.source === 'request') {
         await adminDashboardService.approveAccountRequest(req.id);
@@ -88,8 +95,6 @@ const PendingRequestsView = () => {
       showError('No hay cuentas pendientes para aprobar.');
       return;
     }
-    if (!window.confirm(`¿Estás seguro de que deseas aprobar TODAS las cuentas pendientes (${pendientes.length})?`)) return;
-    
     setLoading(true);
     let successCount = 0;
     let errorCount = 0;
@@ -108,7 +113,6 @@ const PendingRequestsView = () => {
   };
 
   const handleReject = async (req) => {
-    if (!window.confirm(`¿Estás seguro de que deseas rechazar la cuenta de ${req.userName}?`)) return;
     try {
       if (req.source === 'request') {
         await adminDashboardService.rejectAccountRequest(req.id);
@@ -121,6 +125,28 @@ const PendingRequestsView = () => {
       fetchRequests();
     } catch (error) {
       showError(error.response?.data?.message || 'Error al rechazar la cuenta');
+    }
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingConfirm) return;
+
+    try {
+      if (pendingConfirm.action === 'approveAll') {
+        closeConfirm();
+        await handleApproveAll();
+        return;
+      }
+
+      const req = pendingConfirm.req;
+      if (pendingConfirm.action === 'approve') {
+        await handleApprove(req);
+      } else if (pendingConfirm.action === 'reject') {
+        await handleReject(req);
+      }
+      closeConfirm();
+    } catch (error) {
+      showError(error.response?.data?.message || 'No fue posible completar la acción');
     }
   };
 
@@ -147,7 +173,7 @@ const PendingRequestsView = () => {
               <h2 className="text-3xl font-bold text-[#1A2E52]">Solicitudes de Apertura de Cuenta</h2>
               <div className="flex gap-3">
                 <button 
-                  onClick={handleApproveAll}
+                  onClick={() => openConfirm('approveAll')}
                   className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl font-bold hover:shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
                 >
                   <FaCheckDouble /> Aceptar Todas
@@ -208,7 +234,7 @@ const PendingRequestsView = () => {
                           <td>
                             <div className="flex gap-2">
                               <button 
-                                onClick={() => handleApprove(req)}
+                                onClick={() => openConfirm('approve', req)}
                                 disabled={req.status !== 'PENDIENTE' && req.status !== 'RECHAZADA'}
                                 className={`px-3 py-1.5 text-white rounded-lg text-xs font-bold transition-all shadow-sm transform ${(req.status === 'PENDIENTE' || req.status === 'RECHAZADA') ? 'bg-green-500 hover:bg-green-600 hover:shadow-md hover:-translate-y-0.5' : 'bg-gray-400 opacity-50 cursor-not-allowed'}`}
                               >
@@ -217,7 +243,7 @@ const PendingRequestsView = () => {
                               
                               {filterStatus !== 'RECHAZADA' && (
                                 <button 
-                                  onClick={() => handleReject(req)}
+                                  onClick={() => openConfirm('reject', req)}
                                   disabled={req.status !== 'PENDIENTE'}
                                   className={`px-3 py-1.5 text-white rounded-lg text-xs font-bold transition-all shadow-sm transform ${req.status === 'PENDIENTE' ? 'bg-red-500 hover:bg-red-600 hover:shadow-md hover:-translate-y-0.5' : 'bg-gray-400 opacity-50 cursor-not-allowed'}`}
                                 >
@@ -247,6 +273,20 @@ const PendingRequestsView = () => {
           onSuccess={fetchRequests} 
         />
       )}
+
+      <ConfirmModal
+        open={!!pendingConfirm}
+        title={pendingConfirm?.action === 'approveAll' ? 'Aceptar todas las solicitudes' : pendingConfirm?.action === 'approve' ? 'Aprobar solicitud' : 'Rechazar solicitud'}
+        message={pendingConfirm?.action === 'approveAll'
+          ? `¿Deseas aprobar todas las solicitudes pendientes (${filteredRequests.filter(r => r.status === 'PENDIENTE').length})?`
+          : pendingConfirm?.action === 'approve'
+            ? `¿Deseas aprobar la cuenta de ${pendingConfirm?.req?.userName || 'este usuario'}?`
+            : `¿Deseas rechazar la cuenta de ${pendingConfirm?.req?.userName || 'este usuario'}?`}
+        confirmLabel={pendingConfirm?.action === 'reject' ? 'Rechazar' : 'Aceptar'}
+        tone={pendingConfirm?.action === 'reject' ? 'danger' : 'primary'}
+        onConfirm={handleConfirmAction}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };

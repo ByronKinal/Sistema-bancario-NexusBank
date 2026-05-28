@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AdminLayout from './AdminLayout.jsx';
 import AdminPageHeader from './AdminPageHeader.jsx';
 import { getReversalRequests, updateReversalRequest } from '../../../utils/reversalRequests.js';
+import RevertModal from '../../RevertModal.jsx';
 import { adminDashboardService } from '../../../api/adminDashboard.service.js';
 import { showError, showSuccess } from '../../../utils/toast.js';
 
@@ -71,14 +72,25 @@ const ReversionsManagementView = () => {
     });
   }, [items, search, statusFilter, typeFilter]);
 
-  const handleResolve = async (item, nextStatus) => {
-    if (!item || String(item.status).toUpperCase() !== 'PENDING') return;
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolveTarget, setResolveTarget] = useState(null);
+  const [resolveNextStatus, setResolveNextStatus] = useState(null);
 
-    const comment = window.prompt(
-      nextStatus === 'APPROVED'
-        ? 'Comentario para aprobar la reversión (opcional):'
-        : 'Motivo de rechazo de la reversión:'
-    ) || '';
+  const handleResolve = (item, nextStatus) => {
+    if (!item || String(item.status).toUpperCase() !== 'PENDING') return;
+    setResolveTarget(item);
+    setResolveNextStatus(nextStatus);
+    setShowResolveModal(true);
+  };
+
+  const handleResolveConfirm = async (comment) => {
+    const item = resolveTarget;
+    const nextStatus = resolveNextStatus;
+    setShowResolveModal(false);
+    setResolveTarget(null);
+    setResolveNextStatus(null);
+
+    if (!item) return;
 
     if (nextStatus === 'REJECTED' && !comment.trim()) {
       showError('Debes escribir un motivo de rechazo.');
@@ -88,7 +100,7 @@ const ReversionsManagementView = () => {
     if (nextStatus === 'APPROVED') {
       try {
         if (item.type === 'TRANSFERENCIA') {
-          await adminDashboardService.revertTransfer(item.operationId, { reason: item.reason });
+          await adminDashboardService.revertTransfer(item.operationId, { reason: comment || item.reason });
         } else if (item.type === 'DEPOSITO') {
           await adminDashboardService.rejectDeposit(item.operationId);
         }
@@ -178,14 +190,14 @@ const ReversionsManagementView = () => {
                         <button
                           type="button"
                           className="support-action-btn support-action-btn-unfreeze"
-                          onClick={() => handleResolve(item, 'APPROVED')}
+                            onClick={() => handleResolve(item, 'APPROVED')}
                         >
                           Aprobar
                         </button>
                         <button
                           type="button"
                           className="support-action-btn support-action-btn-freeze"
-                          onClick={() => handleResolve(item, 'REJECTED')}
+                            onClick={() => handleResolve(item, 'REJECTED')}
                         >
                           Rechazar
                         </button>
@@ -198,6 +210,19 @@ const ReversionsManagementView = () => {
           )}
         </div>
       </section>
+      {showResolveModal && (
+        <RevertModal
+          open={showResolveModal}
+          onClose={() => { setShowResolveModal(false); setResolveTarget(null); setResolveNextStatus(null); }}
+          onConfirm={handleResolveConfirm}
+          title={resolveNextStatus === 'APPROVED' ? 'Comentario para aprobar reversión (opcional)' : 'Motivo de rechazo de la reversión'}
+          initialReason={resolveTarget?.adminComment || ''}
+          createdAt={resolveTarget?.createdAt}
+          disableTimeCheck={true}
+          requireReason={resolveNextStatus === 'REJECTED'}
+          okLabel={resolveNextStatus === 'APPROVED' ? 'Aprobar' : 'Rechazar'}
+        />
+      )}
     </AdminLayout>
   );
 };

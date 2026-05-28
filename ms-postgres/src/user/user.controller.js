@@ -17,6 +17,7 @@ import {
   applyAdminExposureRules,
   applyExposureRulesByRole
 } from './services/user-masking.service.js';
+import notificationService from '../../services/notification.service.js';
 
 const createSensitiveAudit = async ({ req, actorUserId, targetUserId, outcome, metadata = {} }) => {
   try {

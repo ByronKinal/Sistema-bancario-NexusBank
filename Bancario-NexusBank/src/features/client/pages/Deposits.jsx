@@ -6,6 +6,7 @@ import { clientDepositService } from '../../../shared/api/clientDeposit.service.
 import { showError, showSuccess } from '../../../shared/utils/toast.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { addReversalRequest, getLatestReversibleTransaction, isReversalApproved, hasReversalRequest } from '../../../shared/utils/reversalRequests.js';
+import RevertModal from '../../../shared/components/RevertModal.jsx';
 
 const getAccountTypeLabel = (account) => {
   const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
@@ -341,21 +342,35 @@ export const Deposits = () => {
 
   const canReverseDeposit = (deposit) => {
     if (!deposit || !latestReversibleTransaction || deposit.status === 'REVERTIDO') return false;
-    
+
     const isTarget = String(deposit.id) === String(latestReversibleTransaction.id)
       || String(deposit.reference) === String(latestReversibleTransaction.reference);
-      
     if (!isTarget) return false;
 
-    // Don't show button if there is already a pending or approved request
+    // Don't allow if there is already a pending or approved request
     return !hasReversalRequest(deposit.id) && !hasReversalRequest(deposit.reference);
   };
 
-  const handleRequestReversal = (deposit) => {
-    if (!deposit) return;
+  const isWithinRevertWindow = (deposit, windowMs = 60000) => {
+    if (!deposit) return false;
+    const created = new Date(deposit.date || deposit.createdAt || deposit.raw?.createdAt || 0).getTime();
+    if (!created) return false;
+    return (Date.now() - created) <= windowMs;
+  };
+  const [showRevertModal, setShowRevertModal] = useState(false);
+  const [revertTarget, setRevertTarget] = useState(null);
 
-    const reason = window.prompt('Describe por qué quieres revertir este depósito:') || '';
-    if (!reason.trim()) {
+  const openRevertModal = (deposit) => {
+    setRevertTarget(deposit);
+    setShowRevertModal(true);
+  };
+
+  const handleConfirmRevert = (reason) => {
+    const deposit = revertTarget;
+    setShowRevertModal(false);
+    setRevertTarget(null);
+    if (!deposit) return;
+    if (!reason || !reason.trim()) {
       showError('Debes escribir un motivo para enviar la reversión.');
       return;
     }
@@ -561,9 +576,10 @@ export const Deposits = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleRequestReversal(item);
+                              openRevertModal(item);
                             }}
-                            className="rounded-full px-4 py-2 text-xs font-semibold border border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white transition"
+                            disabled={!isWithinRevertWindow(item)}
+                            className={`rounded-full px-4 py-2 text-xs font-semibold border ${isWithinRevertWindow(item) ? 'border-[#B45309] text-[#B45309] bg-white hover:bg-[#B45309] hover:text-white' : 'border-gray-200 text-gray-400 bg-white cursor-not-allowed' } transition`}
                           >
                             Revertir
                           </button>
@@ -650,6 +666,15 @@ export const Deposits = () => {
           )}
         </section>
       </div>
+      {showRevertModal && (
+        <RevertModal
+          open={showRevertModal}
+          onClose={() => { setShowRevertModal(false); setRevertTarget(null); }}
+          onConfirm={handleConfirmRevert}
+          title={`Revertir depósito ${revertTarget?.reference || revertTarget?.id || ''}`}
+          createdAt={revertTarget?.date || revertTarget?.createdAt || revertTarget?.raw?.createdAt}
+        />
+      )}
     </div>
   );
 };

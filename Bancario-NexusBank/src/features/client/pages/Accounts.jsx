@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useClientStore } from '../store/useClientStore.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
 import { clientAccountService } from '../../../shared/api/clientAccount.service.js';
@@ -56,10 +57,13 @@ const TxIcon = ({ type }) => {
 const Accounts = () => {
   const { accounts, mainAccount, userProfile, fetchAllAccounts, fetchMainAccount, loading } = useClientStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const [selected, setSelected] = useState(null);
   const [recentTx, setRecentTx] = useState([]);
   const [showNewAccountModal, setShowNewAccountModal] = useState(false);
+
+  const selectedAccountIdFromRoute = new URLSearchParams(location.search).get('accountId');
  
   useEffect(() => {
     const init = async () => {
@@ -72,9 +76,24 @@ const Accounts = () => {
   }, [fetchAllAccounts, fetchMainAccount]);
  
   useEffect(() => {
-    const primary = mainAccount || (accounts && accounts.length > 0 ? accounts[0] : null);
-    if (!selected && primary) setSelected(primary);
-  }, [accounts, mainAccount, selected]);
+    const routeTarget = selectedAccountIdFromRoute
+      ? [...(accounts || []), mainAccount].find((account) => {
+          if (!account) return false;
+          return String(account.id) === String(selectedAccountIdFromRoute)
+            || String(account.accountNumber) === String(selectedAccountIdFromRoute);
+        })
+      : null;
+
+    if (routeTarget) {
+      setSelected(routeTarget);
+      return;
+    }
+
+    if (!selected) {
+      const primary = mainAccount || (accounts && accounts.length > 0 ? accounts[0] : null);
+      if (primary) setSelected(primary);
+    }
+  }, [accounts, mainAccount, selectedAccountIdFromRoute, selected]);
  
   const handleSelect = (acc) => setSelected(acc);
  
@@ -140,23 +159,10 @@ const Accounts = () => {
           <h2 className="accounts-title">Mis cuentas</h2>
           <p className="accounts-sub">Todas las cuentas asociadas a tu usuario</p>
         </div>
-        <div className="email-pill">
-          <span className="email-pill-dot"></span>
-          <span className="email-pill-txt">ID {userId} · {totalAccounts} cuenta{totalAccounts !== 1 ? 's' : ''}</span>
-        </div>
+    
       </div>
  
-      {/* Banner de protección */}
-      <div className="protected-banner">
-        <div className="protected-icon">
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M3 5V4a3 3 0 0 1 6 0v1M2 5h8a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" stroke="#fff" strokeWidth="1"/>
-          </svg>
-        </div>
-        <span className="protected-txt">
-          Ruta protegida · Solo ves las cuentas vinculadas a <strong>ID {userId}</strong>. Sesión verificada con token.
-        </span>
-      </div>
+     
  
       <div className="accounts-layout">
  

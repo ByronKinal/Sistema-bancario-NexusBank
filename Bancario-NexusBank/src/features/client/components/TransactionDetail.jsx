@@ -1,6 +1,7 @@
 import { FaTimes, FaPrint, FaCheckCircle, FaClock, FaTimesCircle, FaDownload } from 'react-icons/fa';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { showError } from '../../../shared/utils/toast.js';
 import '../../../styles/transactionDetail.css';
 
 const formatDate = (dateString) => {
@@ -95,7 +96,7 @@ const openPrintWindow = (transaction) => {
   const html = buildPrintHtml(transaction);
   const printWindow = window.open('', '_blank', 'width=900,height=800');
   if (!printWindow) {
-    alert('No se pudo abrir la ventana de impresión. Verifica bloqueadores de ventanas emergentes.');
+    showError('No se pudo abrir la ventana de impresión. Verifica bloqueadores de ventanas emergentes.');
     return;
   }
   printWindow.document.write(html);
@@ -109,7 +110,7 @@ const openPrintWindow = (transaction) => {
 const handleDownloadPdf = async (transaction) => {
   const el = document.querySelector('.transaction-detail-modal');
   if (!el) {
-    alert('No se encontró el contenido para generar el PDF.');
+    showError('No se encontró el contenido para generar el PDF.');
     return;
   }
 
@@ -181,7 +182,7 @@ const handleDownloadPdf = async (transaction) => {
     document.body.removeChild(container);
   } catch (err) {
     console.error(err);
-    alert('Error al generar el PDF: ' + (err?.message || err));
+    showError('Error al generar el PDF: ' + (err?.message || err));
   }
 };
 

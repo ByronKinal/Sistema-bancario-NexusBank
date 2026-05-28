@@ -70,7 +70,7 @@ const getTypeLabel = (type) => {
 };
 
 export default function AccountHistory() {
-  const { accounts, accountHistory, historyLoading, historyError, fetchAccountHistory } = useClientStore();
+  const { accounts, accountHistory, historyLoading, historyError, fetchAccountHistory, fetchAllAccounts } = useClientStore();
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [filters, setFilters] = useState({
     type: '',
@@ -87,9 +87,15 @@ export default function AccountHistory() {
   // Inicializar con primera cuenta
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) {
-      setSelectedAccountId(accounts[0].id);
+      setSelectedAccountId(String(accounts[0].id));
     }
   }, [accounts, selectedAccountId]);
+
+  useEffect(() => {
+    if (accounts.length === 0) {
+      fetchAllAccounts();
+    }
+  }, [accounts.length, fetchAllAccounts]);
 
   // Cargar historial cuando cambien filtros o página
   useEffect(() => {
@@ -168,13 +174,13 @@ export default function AccountHistory() {
             id="account-select"
             value={selectedAccountId || ''}
             onChange={(e) => {
-              setSelectedAccountId(e.target.value);
+                setSelectedAccountId(String(e.target.value));
               setCurrentPage(1);
             }}
             className="account-select"
           >
-            {accounts.map(acc => (
-              <option key={acc.id} value={acc.id}>
+              {accounts.map(acc => (
+                <option key={acc.id} value={String(acc.id)}>
                 {acc.accountNumber || acc.number} - {acc.accountType || 'Cuenta'} - Q{parseFloat(acc.accountBalance || 0).toFixed(2)}
               </option>
             ))}
@@ -202,14 +208,14 @@ export default function AccountHistory() {
 
       {/* Barra de búsqueda y filtros */}
       <div className="history-controls">
-        <div className="search-bar">
-          <FaSearch className="search-icon" />
+        <div className="history-search-bar">
+          <FaSearch className="history-search-icon" />
           <input
             type="text"
             placeholder="Buscar por descripción, referencia o cuenta..."
             value={filters.searchTerm}
             onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
-            className="search-input"
+            className="history-search-input"
           />
         </div>
         <button

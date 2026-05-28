@@ -1,353 +1,204 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useClientStore } from '../store/useClientStore.js';
 import { useAuthStore } from '../../auth/store/authStore.js';
+import { clientAccountService } from '../../../shared/api/clientAccount.service.js';
+import { BalanceCard } from '../components/BalanceCard.jsx';
+import { AccountsGrid } from '../components/AccountsGrid.jsx';
+import { RecentTransactions } from '../components/RecentTransactions.jsx';
+import { Card, Typography, Spinner } from '@material-tailwind/react';
 import { showError } from '../../../shared/utils/toast.js';
-import { 
-  FaUser, 
-  FaClipboardList, 
-  FaMoneyBillWave, 
-  FaExchangeAlt, 
-  FaUndo, 
-  FaStar, 
-  FaBullhorn, 
-  FaCreditCard, 
-  FaShoppingBag, 
-  FaInbox 
-} from 'react-icons/fa';
+import { FaChartBar, FaPiggyBank, FaMoneyBillWave } from 'react-icons/fa';
 
-const getAccountTypeLabel = (account) => {
-  const rawType = String(account?.accountType || account?.type || account?.name || '').trim().toLowerCase();
+const getMonthRange = (date = new Date()) => {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  if (!rawType) return 'Cuenta';
-  if (rawType.includes('corrient') || rawType.includes('monetar')) return 'Cuenta corriente';
-  if (rawType.includes('ahor')) return 'Cuenta de ahorro';
-  if (rawType.startsWith('cuenta')) return rawType.charAt(0).toUpperCase() + rawType.slice(1);
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  };
+};
 
-  return `Cuenta ${rawType}`;
+const isIncomeTransaction = (transaction) => {
+  const type = String(transaction?.type || '').toUpperCase();
+  return ['DEPOSITO', 'TRANSFERENCIA_RECIBIDA', 'INGRESO', 'ABONO'].includes(type);
+};
+
+const isExpenseTransaction = (transaction) => {
+  const type = String(transaction?.type || '').toUpperCase();
+  return ['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA', 'EGRESO', 'GASTO'].includes(type);
+};
+
+const computeMonthlyTotals = (transactions = []) => {
+  return transactions.reduce((totals, transaction) => {
+    const amount = Number(transaction?.amount || 0);
+    if (isIncomeTransaction(transaction)) {
+      totals.income += amount;
+    } else if (isExpenseTransaction(transaction)) {
+      totals.expense += amount;
+    }
+    return totals;
+  }, { income: 0, expense: 0 });
 };
 
 export const ClientDashboard = () => {
-  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const {
-    mainAccount,
-    accounts,
-    transactions,
-    userProfile,
-    loading,
-    error,
-    fetchDashboardData,
-    refreshDashboardData,
-    clearError,
-  } = useClientStore();
+  const navigate = useNavigate();
+  const [data, setData] = useState({
+    account: null,
+    profile: null,
+    transactions: [],
+    accounts: [],
+  });
+  const [monthlyTotals, setMonthlyTotals] = useState({ income: 0, expense: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
+  }, []);
 
-  useEffect(() => {
-    const refreshData = () => {
-      refreshDashboardData();
-    };
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const response = await clientAccountService.getDashboardData();
+      const accounts = Array.isArray(response.accounts) ? response.accounts : [];
+      const mainAccount = response.account || accounts[0] || null;
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refreshData();
+      const normalizedAccount = mainAccount
+        ? {
+            ...mainAccount,
+            balance: Number(mainAccount.accountBalance ?? mainAccount.balance ?? 0),
+            currency: mainAccount.currency || 'Q',
+            accountType: mainAccount.accountType || 'Cuenta',
+          }
+        : null;
+
+      const accountId = normalizedAccount?.id || normalizedAccount?.accountId || null;
+      let monthlyIncome = 0;
+      let monthlyExpense = 0;
+
+      if (accountId) {
+        const { startDate, endDate } = getMonthRange();
+        try {
+          const monthHistory = await clientAccountService.getAccountHistory({
+            accountId,
+            startDate,
+            endDate,
+            limit: 500,
+          });
+
+          const monthTransactions = Array.isArray(monthHistory?.transactions) ? monthHistory.transactions : [];
+          const computed = computeMonthlyTotals(monthTransactions);
+          monthlyIncome = Number(monthHistory?.summary?.totalIncome || computed.income || 0);
+          monthlyExpense = Number(monthHistory?.summary?.totalExpense || computed.expense || 0);
+        } catch (historyError) {
+          console.warn('No se pudo cargar el historial mensual para el dashboard', historyError);
+          const computed = computeMonthlyTotals(Array.isArray(response.transactions) ? response.transactions : []);
+          monthlyIncome = computed.income;
+          monthlyExpense = computed.expense;
+        }
       }
-    };
 
-    window.addEventListener('focus', refreshData);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+      setData({
+        account: normalizedAccount,
+        profile: response.profile?.user || response.profile || user || null,
+        transactions: Array.isArray(response.transactions) ? response.transactions : [],
+        accounts: accounts.map((account) => ({
+          ...account,
+          balance: Number(account.accountBalance ?? account.balance ?? 0),
+          currency: account.currency || 'Q',
+          accountType: account.accountType || 'Cuenta',
+        })),
+      });
 
-    const intervalId = window.setInterval(refreshData, 20000);
-
-    return () => {
-      window.removeEventListener('focus', refreshData);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.clearInterval(intervalId);
-    };
-  }, [refreshDashboardData]);
-
-  useEffect(() => {
-    if (error) {
-      showError(error);
-      clearError();
+      setMonthlyTotals({ income: monthlyIncome, expense: monthlyExpense });
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      showError('Error al cargar los datos del dashboard');
+    } finally {
+      setLoading(false);
     }
-  }, [error, clearError]);
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="relative w-20 h-20">
-          <div className="absolute inset-0 rounded-full border-4 border-[#2D5899] opacity-20"></div>
-          <div className="absolute inset-0 rounded-full border-4 border-t-[#C8A84B] border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Spinner className="mx-auto mb-4" />
+          <p className="text-gray-600">Cargando dashboard...</p>
         </div>
       </div>
     );
   }
 
-  const displayAccounts = accounts.length > 0 ? accounts : (mainAccount ? [mainAccount] : []);
-  const secondaryAccounts = displayAccounts.filter(
-    (account) => {
-      const mainId = mainAccount?.id;
-      const mainNumber = mainAccount?.accountNumber;
-      const accId = account?.id;
-      const accNumber = account?.accountNumber;
-      
-      // Excluir la cuenta principal de la lista de secundarias
-      return (mainId && mainId !== accId) || (mainNumber && mainNumber !== accNumber);
-    }
-  );
-  
-  // Obtener la cuenta principal: si mainAccount es null, usar la primera de accounts
-  const primaryAccount = mainAccount || (accounts.length > 0 ? accounts[0] : null);
-  
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-
-  let calculatedIncomes = 0;
-  let calculatedExpenses = 0;
-
-  transactions.forEach((tx) => {
-    if (tx.status && tx.status !== 'COMPLETADA') return;
-    
-    const txDate = new Date(tx.createdAt || tx.date || tx.updatedAt);
-    if (txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
-      const amount = Number(tx.amount) || 0;
-      if (tx.type === 'DEPOSITO' || tx.type === 'TRANSFERENCIA_RECIBIDA') {
-        calculatedIncomes += amount;
-      } else if (tx.type === 'RETIRO' || tx.type === 'TRANSFERENCIA_ENVIADA' || tx.type === 'COMPRA') {
-        calculatedExpenses += amount;
-      }
-    }
-  });
-
-  const totalBalance = primaryAccount?.accountBalance || primaryAccount?.balance || primaryAccount?.saldo || 0;
-  const totalIncomes = calculatedIncomes;
-  const totalExpenses = calculatedExpenses;
-
-  // Limitar movimientos recientes para no saturar la vista
-  const displayTransactions = transactions.slice(0, 5);
-
-  const userName = userProfile?.name || userProfile?.Name || user?.firstName || user?.name || 'Usuario';
-
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-4xl lg:text-5xl font-extrabold text-[#1A2E52] tracking-tight">
-            Hola, <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2D5899] to-[#C8A84B]">{userName}</span>
-          </h1>
-          <p className="text-gray-500 font-medium mt-2">Aquí tienes el resumen de tus finanzas al día de hoy.</p>
-        </div>
-        <div className="glass-panel px-4 py-2 rounded-full inline-flex items-center self-start md:self-end">
-          <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-          <span className="text-sm font-semibold text-gray-700">Conexión Segura</span>
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-        
-        {/* Saldo Total Consolidado */}
-        <div className="lg:col-span-1 bg-gradient-to-br from-[#1A2E52] via-[#2D5899] to-[#4B6697] rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden hover-lift">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10 blur-2xl"></div>
-          <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 rounded-full bg-[#C8A84B] opacity-20 blur-xl"></div>
-          
-          <div className="relative z-10">
-            <div className="flex justify-between items-start mb-8">
-              <p className="text-[#E8D8A0] font-medium tracking-wide uppercase text-sm">Saldo Disponible</p>
-              <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-lg flex items-center justify-center">
-                <FaCreditCard className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <h2 className="text-4xl lg:text-5xl font-bold mb-2">
-              Q {totalBalance.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-            </h2>
-            <p className="text-white/70 text-sm font-medium">Cuenta Principal</p>
-          </div>
-        </div>
-
-        {/* Ingresos y Gastos */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-          {/* Ingresos */}
-          <div className="glass-panel rounded-3xl p-6 lg:p-8 hover-lift">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 font-semibold mb-1">Ingresos del mes</p>
-                <h3 className="text-3xl font-bold text-[#2D5899]">
-                  + Q {totalIncomes.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-                </h3>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 shadow-inner">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-              </div>
-            </div>
-            <div className="mt-6 w-full bg-gray-200 rounded-full h-1.5">
-              <div className="bg-green-500 h-1.5 rounded-full" style={{ width: '70%' }}></div>
-            </div>
-          </div>
-
-          {/* Gastos */}
-          <div className="glass-panel rounded-3xl p-6 lg:p-8 hover-lift">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-500 font-semibold mb-1">Gastos del mes</p>
-                <h3 className="text-3xl font-bold text-[#1A2E52]">
-                  - Q {totalExpenses.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-                </h3>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 shadow-inner">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path></svg>
-              </div>
-            </div>
-            <div className="mt-6 w-full bg-gray-200 rounded-full h-1.5">
-              <div className="bg-red-500 h-1.5 rounded-full" style={{ width: '45%' }}></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Acciones y Movimientos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-        
-        {/* Acciones Rápidas */}
-        <div className="lg:col-span-2">
-          <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">¿Qué deseas hacer hoy?</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 lg:gap-6">
-            {[
-              { label: 'Mis cuentas', icon: FaUser, color: 'from-blue-400 to-blue-600' },
-              { label: 'Historial', icon: FaClipboardList, color: 'from-teal-400 to-teal-600' },
-              { label: 'Depositar', icon: FaMoneyBillWave, color: 'from-indigo-400 to-indigo-600' },
-              { label: 'Transferir', icon: FaExchangeAlt, color: 'from-blue-400 to-blue-600' },
-              { label: 'Reversiones', icon: FaUndo, color: 'from-amber-400 to-amber-600' },
-              { label: 'Favoritos', icon: FaStar, color: 'from-teal-400 to-teal-600' },
-              { label: 'Promociones', icon: FaBullhorn, color: 'from-teal-400 to-teal-600' },
-            ].map((action) => {
-              const ActionIcon = action.icon;
-              return (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={() => {
-                    if (action.label === 'Mis cuentas') return navigate('/clientdashboard/accounts');
-                    if (action.label === 'Historial') return navigate('/clientdashboard/account-history');
-                    if (action.label === 'Depositar') return navigate('/clientdashboard/deposits');
-                    if (action.label === 'Transferir') return navigate('/clientdashboard/transfers');
-                    if (action.label === 'Reversiones') return navigate('/clientdashboard/reversions');
-                    if (action.label === 'Favoritos') return navigate('/clientdashboard/favorites');
-                    if (action.label === 'Promociones') return navigate('/clientdashboard/promotions');
-                  }}
-                  className="glass-panel rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 group hover-lift relative overflow-hidden"
-                >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${action.color} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
-                  <span className="text-4xl transform group-hover:scale-110 transition-transform duration-300 flex items-center justify-center text-[#2D5899]">
-                    <ActionIcon className="w-8 h-8" />
-                  </span>
-                  <span className="font-semibold text-[#1A2E52]">{action.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Cuenta Principal y Secundarias */}
-        <div className="lg:col-span-1">
-          <h3 className="text-2xl font-bold text-[#1A2E52] mb-6">Mi Cuenta</h3>
-          <div className="space-y-4">
-            {/* Cuenta Principal - Fija Arriba */}
-            {primaryAccount && (
-              <div className="glass-panel rounded-2xl p-5 hover-lift cursor-pointer border-l-4 border-l-[#C8A84B] bg-gradient-to-r from-blue-50 to-transparent">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-[#1A2E52]">{getAccountTypeLabel(primaryAccount)} (Principal)</p>
-                    <p className="text-gray-500 text-sm font-mono mt-1">{primaryAccount.accountNumber || '**** **** 1234'}</p>
-                  </div>
-                  <p className="text-[#2D5899] font-bold text-xl">
-                    Q {(primaryAccount.accountBalance || primaryAccount.balance || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            {/* Cuentas Secundarias */}
-            {secondaryAccounts.length > 0 && secondaryAccounts.map((account, idx) => (
-              <div
-                key={idx}
-                className="glass-panel rounded-2xl p-5 hover-lift cursor-pointer border-l-4 border-l-[#C8A84B]"
-              >
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-[#1A2E52]">{getAccountTypeLabel(account)}</p>
-                    <p className="text-gray-500 text-sm font-mono mt-1">{account.accountNumber || '**** **** 1234'}</p>
-                  </div>
-                  <p className="text-[#2D5899] font-bold text-xl">
-                    Q {(account.accountBalance || account.balance || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            ))}
-            
-            {!primaryAccount && secondaryAccounts.length === 0 && (
-              <p className="text-gray-500 text-center py-4 glass-panel rounded-2xl">No hay cuentas disponibles.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Movimientos Recientes */}
       <div>
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-[#1A2E52]">Movimientos Recientes</h3>
-          <button 
-            onClick={() => navigate('/clientdashboard/account-history')}
-            className="text-[#2D5899] hover:text-[#1A2E52] font-semibold transition-colors flex items-center"
+        <Typography variant="h3" className="text-3xl font-bold text-gray-900 mb-2">
+            Bienvenido, {data.profile?.name || data.profile?.Name || user?.name || user?.username}
+        </Typography>
+        <Typography className="text-gray-600">
+          Aquí puedes ver tu información financiera y realizar transacciones
+        </Typography>
+      </div>
+
+      {/* Balance Card */}
+      <BalanceCard account={data.account} />
+
+      {/* Quick Stats */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card className="p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Ingresos del mes</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">
+                Q {monthlyTotals.income.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Basado en movimientos reales</p>
+            </div>
+            <div className="rounded-full bg-green-100 p-3">
+              <FaMoneyBillWave size={24} className="text-green-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Gastos del mes</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">
+                Q {monthlyTotals.expense.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Basado en movimientos reales</p>
+            </div>
+            <div className="rounded-full bg-red-100 p-3">
+              <FaChartBar size={24} className="text-red-600" />
+            </div>
+          </div>
+        </Card>
+
+      </div>
+
+      {/* Accounts Grid */}
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <Typography variant="h5">Mis Cuentas</Typography>
+          <button
+            type="button"
+            onClick={() => navigate('/clientdashboard/accounts')}
+            className="text-sm font-semibold text-[#2D5899] hover:text-[#1A2E52] transition-colors"
           >
-            Ver historial completo <span className="ml-1">→</span>
+            Ver todas las cuentas
           </button>
         </div>
-        <div className="glass-panel rounded-3xl p-2 lg:p-4 overflow-hidden">
-          {displayTransactions.length > 0 ? (
-            <div className="divide-y divide-gray-200/50">
-              {displayTransactions.map((tx, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 hover:bg-white/40 transition-colors rounded-xl">
-                  <div className="flex items-center space-x-4">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-sm ${
-                        ['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'
-                      }`}
-                    >
-                      {['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? (
-                        <FaShoppingBag className="w-5 h-5" />
-                      ) : (
-                        <FaMoneyBillWave className="w-5 h-5" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-bold text-[#1A2E52]">{tx.description || tx.concept || 'Transacción'}</p>
-                      <p className="text-gray-500 text-sm mt-0.5">{tx.date || new Date(tx.createdAt).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={`font-bold text-lg ${['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? 'text-red-600' : 'text-green-600'}`}>
-                      {['RETIRO', 'TRANSFERENCIA_ENVIADA', 'COMPRA'].includes(tx.type) ? '−' : '+'} Q {Math.abs(tx.amount || 0).toLocaleString('es-GT', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-gray-400 text-xs mt-0.5">{tx.status || 'Completado'}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 flex flex-col items-center justify-center">
-              <FaInbox className="w-12 h-12 text-gray-400 mb-3" />
-              <p className="text-gray-500 font-medium">No hay movimientos recientes.</p>
-            </div>
-          )}
-        </div>
+        <AccountsGrid
+          accounts={(data.accounts.length > 0 ? data.accounts : (data.account ? [data.account] : [])).slice(0, 3)}
+        />
       </div>
+
+      {/* Recent Transactions */}
+      <RecentTransactions transactions={data.transactions} />
     </div>
   );
 };
-
