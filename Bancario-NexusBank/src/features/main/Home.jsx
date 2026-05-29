@@ -295,7 +295,6 @@ const Home = () => {
         </div>
 
         <div className="footer-bottom">
-          <div className="footer-bottom-copy">© 2024 NexusBank. Todos los derechos reservados.</div>
 
           <div className="footer-bottom-locale">
             <span className="footer-bottom-item flex items-center">

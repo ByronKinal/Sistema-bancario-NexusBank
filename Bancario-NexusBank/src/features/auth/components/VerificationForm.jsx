@@ -64,9 +64,7 @@ export default function VerificationForm() {
                 <li>Proceso rápido y fácil</li>
               </ul>
             </div>
-            <div className="auth-foot">
-              © 2024 NexusBank
-            </div>
+           
           </div>
 
           {/* Right Side - Form */}
